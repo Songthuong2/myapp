@@ -1,0 +1,54 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    // Collection: categories
+    // Fields: name (string)
+    //
+    // Collection: departments
+    // Fields: name (string)
+    //
+    // Collection: items
+    // Fields: name (string), categoryId (string), unit (string), minStock (number), currentStock (number), expiryDate (string?)
+    //
+    // Collection: transactions
+    // Fields: itemId (string), type (string), fromDeptId (string?), toDeptId (string?), quantity (number), timestamp (timestamp), note (string?)
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (request.auth.token.email == "manhha2@gmail.com");
+    }
+
+    match /categories/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated(); // Allow all logged in users to create categories for now
+    }
+
+    match /departments/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    match /items/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated(); // For stock updates
+    }
+
+    match /transactions/{id} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+    }
+
+    match /holidays/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+  }
+}

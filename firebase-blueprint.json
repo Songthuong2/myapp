@@ -1,0 +1,68 @@
+{
+  "entities": {
+    "Category": {
+      "title": "Nhóm vật tư",
+      "description": "Phân loại vật tư (Vật tư y tế, Văn phòng phẩm, Thuốc...)",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Tên nhóm" }
+      },
+      "required": ["name"]
+    },
+    "Department": {
+      "title": "Phòng ban",
+      "description": "Phòng sử dụng vật tư (X-quang, CT...)",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Tên phòng" }
+      },
+      "required": ["name"]
+    },
+    "Item": {
+      "title": "Vật tư",
+      "description": "Thông tin chi tiết vật tư",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Tên vật tư" },
+        "categoryId": { "type": "string", "description": "ID nhóm vật tư" },
+        "unit": { "type": "string", "description": "Đơn vị tính" },
+        "minStock": { "type": "number", "description": "Ngưỡng tồn kho tối thiểu" },
+        "currentStock": { "type": "number", "description": "Số lượng tồn hiện tại" },
+        "expiryDate": { "type": "string", "format": "date", "description": "Hạn sử dụng" }
+      },
+      "required": ["name", "categoryId", "unit", "minStock", "currentStock"]
+    },
+    "Transaction": {
+      "title": "Giao dịch",
+      "description": "Nhật ký nhập, xuất, luân chuyển",
+      "type": "object",
+      "properties": {
+        "itemId": { "type": "string", "description": "ID vật tư" },
+        "type": { "type": "string", "enum": ["IN", "OUT", "TRANSFER"], "description": "Loại giao dịch" },
+        "fromDeptId": { "type": "string", "description": "ID phòng chuyển đi (nếu có)" },
+        "toDeptId": { "type": "string", "description": "ID phòng nhận (nếu có)" },
+        "quantity": { "type": "number", "description": "Số lượng" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "Thời gian giao dịch" },
+        "note": { "type": "string", "description": "Ghi chú" }
+      },
+      "required": ["itemId", "type", "quantity", "timestamp"]
+    },
+    "Holiday": {
+      "title": "Ngày nghỉ",
+      "description": "Danh sách các ngày nghỉ không làm việc",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "format": "date", "description": "Ngày nghỉ (YYYY-MM-DD)" },
+        "note": { "type": "string", "description": "Ghi chú (Lễ, Tết...)" }
+      },
+      "required": ["date"]
+    }
+  },
+  "firestore": {
+    "/categories": { "schema": "Category", "description": "Danh mục nhóm vật tư" },
+    "/departments": { "schema": "Department", "description": "Danh mục phòng ban" },
+    "/items": { "schema": "Item", "description": "Danh sách vật tư" },
+    "/transactions": { "schema": "Transaction", "description": "Lịch sử giao dịch" },
+    "/holidays": { "schema": "Holiday", "description": "Danh sách ngày nghỉ" }
+  }
+}

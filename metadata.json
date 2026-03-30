@@ -1,0 +1,5 @@
+{
+  "name": "Quản lý Vật tư Chẩn đoán Hình ảnh",
+  "description": "Hệ thống quản lý kho vật tư y tế, thuốc và văn phòng phẩm cho khoa Chẩn đoán hình ảnh, tích hợp trợ lý AI Gemini.",
+  "requestFramePermissions": []
+}
