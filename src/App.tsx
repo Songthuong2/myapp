@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
+// @ts-ignore
+import html2pdf from 'html2pdf.js';
 import { 
   LayoutDashboard, 
   Package, 
@@ -28,7 +30,11 @@ import {
   ArrowDownRight,
   Calendar,
   ClipboardCheck,
-  CalendarRange
+  CalendarRange,
+  Pencil,
+  Sun,
+  Moon,
+  RefreshCw
 } from 'lucide-react';
 import { 
   auth, 
@@ -56,6 +62,7 @@ import {
 } from 'firebase/firestore';
 import { analyzeInventory } from './geminiService';
 import ReactMarkdown from 'react-markdown';
+import { toast, Toaster } from 'sonner';
 import { 
   BarChart, 
   Bar, 
@@ -232,6 +239,9 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isSidebarOpen, setSidebarOpen] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('theme') === 'dark');
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
   // Data States
   const [categories, setCategories] = useState<Category[]>([]);
@@ -265,6 +275,42 @@ export default function App() {
     });
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [darkMode]);
+
+  const handleResetData = async () => {
+    if (user?.email !== 'manhha2@gmail.com') {
+      toast.error("Bạn không có quyền thực hiện thao tác này.");
+      return;
+    }
+    setIsResetting(true);
+    try {
+      const collectionsToReset = ['categories', 'departments', 'items', 'transactions', 'holidays'];
+      for (const colName of collectionsToReset) {
+        const snap = await getDocs(collection(db, colName));
+        const deletePromises = snap.docs.map(d => deleteDoc(doc(db, colName, d.id)));
+        await Promise.all(deletePromises);
+      }
+      toast.success("Đã reset toàn bộ dữ liệu thành công!");
+      setShowResetConfirm(false);
+      // Refresh the page to clear any local state if necessary, 
+      // though onSnapshot should handle it.
+    } catch (error) {
+      console.error("Reset Error:", error);
+      toast.error("Có lỗi xảy ra khi reset dữ liệu.");
+      handleFirestoreError(error, OperationType.DELETE, "bulk-reset");
+    } finally {
+      setIsResetting(false);
+    }
+  };
 
   const handleLogin = async () => {
     const provider = new GoogleAuthProvider();
@@ -328,13 +374,14 @@ export default function App() {
 
   if (!user) {
     return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50 p-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center border border-slate-100">
+      <div className={`h-screen w-screen flex flex-col items-center justify-center p-4 ${darkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
+        <Toaster position="top-right" richColors />
+        <div className={`max-w-md w-full rounded-2xl shadow-xl p-8 text-center border ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
           <div className="w-20 h-20 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-blue-200">
             <Package className="w-10 h-10 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">Kho Vật Tư CDHA</h1>
-          <p className="text-slate-500 mb-8">Hệ thống quản lý vật tư y tế thông minh tích hợp AI dành cho khoa Chẩn đoán hình ảnh.</p>
+          <h1 className={`text-3xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-slate-900'}`}>Kho Vật Tư CDHA</h1>
+          <p className={`mb-8 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Hệ thống quản lý vật tư y tế thông minh tích hợp AI dành cho khoa Chẩn đoán hình ảnh.</p>
           <button 
             onClick={handleLogin}
             className="w-full py-4 px-6 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-3 shadow-lg shadow-blue-100 active:scale-95"
@@ -348,19 +395,21 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex">
+    <div className={`min-h-screen flex ${darkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
+      <Toaster position="top-right" richColors />
       {/* Sidebar */}
       <aside className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 transform transition-transform duration-300 ease-in-out
+        fixed inset-y-0 left-0 z-50 w-64 border-r transform transition-transform duration-300 ease-in-out
         ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         lg:translate-x-0 lg:static lg:inset-0
+        ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}
       `}>
         <div className="h-full flex flex-col">
-          <div className="p-6 flex items-center gap-3 border-bottom border-slate-100">
+          <div className={`p-6 flex items-center gap-3 border-b ${darkMode ? 'border-slate-700' : 'border-slate-100'}`}>
             <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-md">
               <Package className="w-6 h-6 text-white" />
             </div>
-            <span className="font-bold text-xl text-slate-900">CDHA Inventory</span>
+            <span className={`font-bold text-xl ${darkMode ? 'text-white' : 'text-slate-900'}`}>CDHA Inventory</span>
           </div>
 
           <nav className="flex-1 px-4 py-6 space-y-2">
@@ -369,59 +418,77 @@ export default function App() {
               label="Tổng quan" 
               active={activeTab === 'dashboard'} 
               onClick={() => {setActiveTab('dashboard'); setSidebarOpen(false);}} 
+              darkMode={darkMode}
             />
             <NavItem 
               icon={<Package />} 
               label="Kho vật tư" 
               active={activeTab === 'inventory'} 
               onClick={() => {setActiveTab('inventory'); setSidebarOpen(false);}} 
+              darkMode={darkMode}
             />
             <NavItem 
               icon={<ArrowLeftRight />} 
               label="Giao dịch" 
               active={activeTab === 'transactions'} 
               onClick={() => {setActiveTab('transactions'); setSidebarOpen(false);}} 
+              darkMode={darkMode}
             />
             <NavItem 
               icon={<ClipboardCheck />} 
               label="Kiểm kê kho" 
               active={activeTab === 'audit'} 
               onClick={() => {setActiveTab('audit'); setSidebarOpen(false);}} 
+              darkMode={darkMode}
             />
             <NavItem 
               icon={<CalendarRange />} 
               label="Dự trù vật tư" 
               active={activeTab === 'planning'} 
               onClick={() => {setActiveTab('planning'); setSidebarOpen(false);}} 
+              darkMode={darkMode}
             />
             <NavItem 
               icon={<FileText />} 
               label="Báo cáo" 
               active={activeTab === 'reports'} 
               onClick={() => {setActiveTab('reports'); setSidebarOpen(false);}} 
+              darkMode={darkMode}
             />
             <NavItem 
               icon={<Calendar />} 
               label="Ngày nghỉ" 
               active={activeTab === 'holidays'} 
               onClick={() => {setActiveTab('holidays'); setSidebarOpen(false);}} 
+              darkMode={darkMode}
             />
             <NavItem 
               icon={<BrainCircuit />} 
               label="Trợ lý AI" 
               active={activeTab === 'assistant'} 
               onClick={() => {setActiveTab('assistant'); setSidebarOpen(false);}} 
+              darkMode={darkMode}
             />
+            
+            {user.email === 'manhha2@gmail.com' && (
+              <button 
+                onClick={() => setShowResetConfirm(true)}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all mt-8 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20`}
+              >
+                <RefreshCw className="w-5 h-5" />
+                <span>Reset dữ liệu</span>
+              </button>
+            )}
           </nav>
 
-          <div className="p-4 border-t border-slate-100">
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50">
+          <div className={`p-4 border-t ${darkMode ? 'border-slate-700' : 'border-slate-100'}`}>
+            <div className={`flex items-center gap-3 p-3 rounded-xl ${darkMode ? 'bg-slate-700/50' : 'bg-slate-50'}`}>
               <img src={user.photoURL || ''} className="w-10 h-10 rounded-full border-2 border-white shadow-sm" alt="User" />
               <div className="flex-1 overflow-hidden">
-                <p className="text-sm font-semibold text-slate-900 truncate">{user.displayName}</p>
-                <p className="text-xs text-slate-500 truncate">{user.email}</p>
+                <p className={`text-sm font-semibold truncate ${darkMode ? 'text-white' : 'text-slate-900'}`}>{user.displayName}</p>
+                <p className={`text-xs truncate ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{user.email}</p>
               </div>
-              <button onClick={handleLogout} className="p-2 text-slate-400 hover:text-red-500 transition-colors">
+              <button onClick={handleLogout} className={`p-2 transition-colors ${darkMode ? 'text-slate-400 hover:text-red-400' : 'text-slate-400 hover:text-red-500'}`}>
                 <LogOut className="w-5 h-5" />
               </button>
             </div>
@@ -432,11 +499,11 @@ export default function App() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Header */}
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-8 sticky top-0 z-40">
-          <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 text-slate-500">
+        <header className={`h-16 border-b flex items-center justify-between px-4 lg:px-8 sticky top-0 z-40 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+          <button onClick={() => setSidebarOpen(true)} className={`lg:hidden p-2 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
             <Menu className="w-6 h-6" />
           </button>
-          <h2 className="text-lg font-semibold text-slate-900 capitalize">
+          <h2 className={`text-lg font-semibold capitalize ${darkMode ? 'text-white' : 'text-slate-900'}`}>
             {activeTab === 'dashboard' ? 'Bảng điều khiển' : 
              activeTab === 'inventory' ? 'Quản lý kho' : 
              activeTab === 'transactions' ? 'Lịch sử giao dịch' : 
@@ -446,8 +513,14 @@ export default function App() {
              activeTab === 'holidays' ? 'Quản lý ngày nghỉ' : 'Trợ lý AI Gemini'}
           </h2>
           <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setDarkMode(!darkMode)}
+              className={`p-2 rounded-lg transition-colors ${darkMode ? 'bg-slate-700 text-amber-400 hover:bg-slate-600' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+            >
+              {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </button>
             <div className="relative hidden sm:block" ref={searchRef}>
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Search className={`w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`} />
               <input 
                 type="text" 
                 placeholder="Tìm kiếm vật tư..." 
@@ -463,7 +536,7 @@ export default function App() {
                     setShowSearchResults(false);
                   }
                 }}
-                className="pl-10 pr-10 py-2 bg-slate-100 border-none rounded-lg text-sm focus:ring-2 focus:ring-blue-500 w-64"
+                className={`pl-10 pr-10 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 w-64 border-none ${darkMode ? 'bg-slate-700 text-white placeholder-slate-500' : 'bg-slate-100 text-slate-900 placeholder-slate-400'}`}
               />
               {globalSearch && (
                 <button 
@@ -477,8 +550,8 @@ export default function App() {
                 </button>
               )}
               {globalSearch && showSearchResults && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-lg shadow-xl border border-slate-200 max-h-96 overflow-y-auto z-50">
-                  <div className="p-2 text-xs font-medium text-slate-500 border-bottom border-slate-100 bg-slate-50">
+                <div className={`absolute top-full left-0 right-0 mt-2 rounded-lg shadow-xl border max-h-96 overflow-y-auto z-50 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                  <div className={`p-2 text-xs font-medium border-b ${darkMode ? 'text-slate-400 border-slate-700 bg-slate-800/50' : 'text-slate-500 border-slate-100 bg-slate-50'}`}>
                     Kết quả tìm kiếm ({items.filter(i => i.name.toLowerCase().includes(globalSearch.toLowerCase())).length})
                   </div>
                   {items
@@ -490,16 +563,15 @@ export default function App() {
                         onClick={() => {
                           setActiveTab('inventory');
                           setShowSearchResults(false);
-                          // We keep the search term so the inventory is filtered
                         }}
-                        className="w-full text-left px-4 py-2 hover:bg-blue-50 transition-colors flex items-center justify-between group"
+                        className={`w-full text-left px-4 py-2 transition-colors flex items-center justify-between group ${darkMode ? 'hover:bg-slate-700' : 'hover:bg-blue-50'}`}
                       >
                         <div>
-                          <p className="text-sm font-medium text-slate-700 group-hover:text-blue-600">{item.name}</p>
-                          <p className="text-xs text-slate-500">{categories.find(c => c.id === item.categoryId)?.name || 'Chưa phân loại'}</p>
+                          <p className={`text-sm font-medium ${darkMode ? 'text-slate-200 group-hover:text-blue-400' : 'text-slate-700 group-hover:text-blue-600'}`}>{item.name}</p>
+                          <p className={`text-xs ${darkMode ? 'text-slate-500' : 'text-slate-500'}`}>{categories.find(c => c.id === item.categoryId)?.name || 'Chưa phân loại'}</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-xs font-bold text-slate-700">{item.currentStock} {item.unit}</p>
+                          <p className={`text-xs font-bold ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>{item.currentStock} {item.unit}</p>
                           <p className={`text-[10px] ${item.currentStock <= item.minStock ? 'text-red-500' : 'text-green-500'}`}>
                             {item.currentStock <= item.minStock ? 'Sắp hết' : 'Ổn định'}
                           </p>
@@ -512,15 +584,10 @@ export default function App() {
                         setActiveTab('inventory');
                         setShowSearchResults(false);
                       }}
-                      className="w-full py-2 text-center text-xs text-blue-600 font-medium hover:bg-blue-50"
+                      className={`w-full py-2 text-center text-xs font-medium ${darkMode ? 'text-blue-400 hover:bg-slate-700' : 'text-blue-600 hover:bg-blue-50'}`}
                     >
                       Xem tất cả kết quả
                     </button>
-                  )}
-                  {items.filter(i => i.name.toLowerCase().includes(globalSearch.toLowerCase())).length === 0 && (
-                    <div className="p-4 text-center text-sm text-slate-500 italic">
-                      Không tìm thấy vật tư nào
-                    </div>
                   )}
                 </div>
               )}
@@ -540,36 +607,70 @@ export default function App() {
               isAnalyzing={isAnalyzing}
               setActiveTab={setActiveTab}
               globalSearch={globalSearch}
+              darkMode={darkMode}
             />
           )}
-          {activeTab === 'inventory' && <Inventory items={items} categories={categories} globalSearch={globalSearch} />}
-          {activeTab === 'transactions' && <Transactions transactions={transactions} items={items} departments={departments} categories={categories} globalSearch={globalSearch} />}
-          {activeTab === 'audit' && <InventoryAudit items={items} categories={categories} globalSearch={globalSearch} />}
-          {activeTab === 'planning' && <InventoryPlanning items={items} transactions={transactions} categories={categories} holidays={holidays} globalSearch={globalSearch} />}
-          {activeTab === 'reports' && <Reports transactions={transactions} items={items} categories={categories} holidays={holidays} globalSearch={globalSearch} />}
-          {activeTab === 'holidays' && <Holidays holidays={holidays} />}
+          {activeTab === 'inventory' && <Inventory items={items} categories={categories} globalSearch={globalSearch} darkMode={darkMode} />}
+          {activeTab === 'transactions' && <Transactions transactions={transactions} items={items} departments={departments} categories={categories} globalSearch={globalSearch} darkMode={darkMode} />}
+          {activeTab === 'audit' && <InventoryAudit items={items} categories={categories} globalSearch={globalSearch} darkMode={darkMode} />}
+          {activeTab === 'planning' && <InventoryPlanning items={items} transactions={transactions} categories={categories} holidays={holidays} globalSearch={globalSearch} darkMode={darkMode} />}
+          {activeTab === 'reports' && <Reports transactions={transactions} items={items} categories={categories} holidays={holidays} globalSearch={globalSearch} darkMode={darkMode} />}
+          {activeTab === 'holidays' && <Holidays holidays={holidays} darkMode={darkMode} />}
           {activeTab === 'assistant' && (
             <AiAssistant 
               analysis={aiAnalysis} 
               isAnalyzing={isAnalyzing} 
               onAnalyze={runAiAnalysis} 
+              darkMode={darkMode}
             />
           )}
         </div>
       </main>
+
+      {/* Reset Confirmation Modal */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className={`rounded-2xl shadow-2xl w-full max-w-sm p-8 text-center border ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
+            <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-8 h-8" />
+            </div>
+            <h3 className={`text-xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-slate-900'}`}>Xác nhận Reset</h3>
+            <p className={`mb-8 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Bạn có chắc chắn muốn xóa TOÀN BỘ dữ liệu? Hành động này sẽ xóa sạch các vật tư, giao dịch, phòng ban và không thể hoàn tác.</p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setShowResetConfirm(false)}
+                disabled={isResetting}
+                className={`flex-1 py-3 font-bold rounded-xl transition-colors ${darkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+              >
+                Hủy
+              </button>
+              <button 
+                onClick={handleResetData}
+                disabled={isResetting}
+                className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition-colors shadow-lg shadow-red-100 flex items-center justify-center gap-2"
+              >
+                {isResetting && <Loader2 className="w-4 h-4 animate-spin" />}
+                Xác nhận
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // --- Sub-components ---
 
-function NavItem({ icon, label, active, onClick }: { icon: any, label: string, active: boolean, onClick: () => void }) {
+function NavItem({ icon, label, active, onClick, darkMode }: { icon: any, label: string, active: boolean, onClick: () => void, darkMode?: boolean }) {
   return (
     <button 
       onClick={onClick}
       className={`
         w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all
-        ${active ? 'bg-blue-50 text-blue-600 font-semibold shadow-sm' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}
+        ${active 
+          ? (darkMode ? 'bg-blue-900/30 text-blue-400 font-semibold' : 'bg-blue-50 text-blue-600 font-semibold shadow-sm') 
+          : (darkMode ? 'text-slate-400 hover:bg-slate-700 hover:text-slate-100' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900')}
       `}
     >
       {React.cloneElement(icon, { className: 'w-5 h-5' })}
@@ -586,7 +687,8 @@ function Dashboard({
   onRunAnalysis, 
   isAnalyzing,
   setActiveTab,
-  globalSearch
+  globalSearch,
+  darkMode
 }: { 
   items: Item[], 
   transactions: Transaction[], 
@@ -595,7 +697,8 @@ function Dashboard({
   onRunAnalysis: () => void,
   isAnalyzing: boolean,
   setActiveTab: (tab: string) => void,
-  globalSearch: string
+  globalSearch: string,
+  darkMode?: boolean
 }) {
   const filteredItems = useMemo(() => {
     if (!globalSearch) return items;
@@ -700,17 +803,17 @@ function Dashboard({
       {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Tổng quan kho</h2>
-          <p className="text-slate-500">Hệ thống quản lý vật tư y tế thông minh CDHA.</p>
+          <h2 className={`text-2xl font-bold tracking-tight ${darkMode ? 'text-white' : 'text-slate-900'}`}>Tổng quan kho</h2>
+          <p className={darkMode ? 'text-slate-400' : 'text-slate-500'}>Hệ thống quản lý vật tư y tế thông minh CDHA.</p>
           {globalSearch && (
-            <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-xl flex items-center justify-between animate-in fade-in slide-in-from-top-2 duration-300">
-              <div className="flex items-center gap-2 text-blue-700">
+            <div className={`mt-4 p-3 border rounded-xl flex items-center justify-between animate-in fade-in slide-in-from-top-2 duration-300 ${darkMode ? 'bg-blue-900/20 border-blue-800/30' : 'bg-blue-50 border-blue-100'}`}>
+              <div className={`flex items-center gap-2 ${darkMode ? 'text-blue-300' : 'text-blue-700'}`}>
                 <Search className="w-4 h-4" />
                 <span className="text-sm font-medium">Đang lọc theo: <strong>"{globalSearch}"</strong></span>
               </div>
               <button 
                 onClick={() => setActiveTab('inventory')}
-                className="text-xs font-semibold text-blue-600 hover:underline"
+                className={`text-xs font-semibold hover:underline ${darkMode ? 'text-blue-400' : 'text-blue-600'}`}
               >
                 Xem chi tiết trong Kho vật tư
               </button>
@@ -718,7 +821,7 @@ function Dashboard({
           )}
         </div>
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 text-sm font-medium text-slate-500 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
+          <div className={`flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-xl border shadow-sm ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-500'}`}>
             <Calendar className="w-4 h-4" />
             {new Date().toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
           </div>
@@ -738,9 +841,10 @@ function Dashboard({
             label="Tổng vật tư" 
             value={filteredItems.length} 
             icon={<Package className="text-blue-600" />} 
-            color="bg-blue-50"
+            color={darkMode ? "bg-blue-900/30" : "bg-blue-50"}
             trend="+2.5%"
             isUp={true}
+            darkMode={darkMode}
           />
         </motion.div>
         <motion.div variants={itemVariants}>
@@ -748,9 +852,10 @@ function Dashboard({
             label="Sắp hết hàng" 
             value={lowStockItems.length} 
             icon={<AlertTriangle className="text-amber-600" />} 
-            color="bg-amber-50"
+            color={darkMode ? "bg-amber-900/30" : "bg-amber-50"}
             trend={lowStockItems.length > 5 ? "+12%" : "-5%"}
             isUp={lowStockItems.length > 5}
+            darkMode={darkMode}
           />
         </motion.div>
         <motion.div variants={itemVariants}>
@@ -758,25 +863,26 @@ function Dashboard({
             label="Giá trị kho" 
             value={totalValue.toLocaleString('vi-VN') + ' đ'} 
             icon={<FileText className="text-purple-600" />} 
-            color="bg-purple-50"
+            color={darkMode ? "bg-purple-900/30" : "bg-purple-50"}
             trend="+5.2%"
             isUp={true}
+            darkMode={darkMode}
           />
         </motion.div>
         <motion.div variants={itemVariants}>
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between h-full group hover:border-blue-200 transition-colors">
+          <div className={`p-6 rounded-2xl border shadow-sm flex flex-col justify-between h-full group transition-colors ${darkMode ? 'bg-slate-800 border-slate-700 hover:border-blue-800' : 'bg-white border-slate-200 hover:border-blue-200'}`}>
             <div className="flex justify-between items-start">
-              <p className="text-sm font-medium text-slate-500">Chỉ số sức khỏe kho</p>
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${healthScore > 80 ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+              <p className={`text-sm font-medium ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Chỉ số sức khỏe kho</p>
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${healthScore > 80 ? (darkMode ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-600') : (darkMode ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-50 text-amber-600')}`}>
                 <CheckCircle2 className="w-5 h-5" />
               </div>
             </div>
             <div className="mt-4">
               <div className="flex items-end gap-2">
-                <p className="text-3xl font-bold text-slate-900">{healthScore}%</p>
-                <span className="text-xs text-slate-400 mb-1.5">An toàn</span>
+                <p className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>{healthScore}%</p>
+                <span className={`text-xs mb-1.5 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>An toàn</span>
               </div>
-              <div className="w-full h-2 bg-slate-100 rounded-full mt-3 overflow-hidden">
+              <div className={`w-full h-2 rounded-full mt-3 overflow-hidden ${darkMode ? 'bg-slate-700' : 'bg-slate-100'}`}>
                 <motion.div 
                   initial={{ width: 0 }}
                   animate={{ width: `${healthScore}%` }}
@@ -858,8 +964,8 @@ function Dashboard({
         </motion.div>
 
         <motion.div variants={itemVariants}>
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm h-full">
-            <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
+          <div className={`p-6 rounded-2xl border shadow-sm h-full ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+            <h3 className={`text-lg font-bold mb-6 flex items-center gap-2 ${darkMode ? 'text-white' : 'text-slate-900'}`}>
               <TrendingUp className="w-5 h-5 text-blue-600" />
               Thao tác nhanh
             </h3>
@@ -869,43 +975,48 @@ function Dashboard({
                 label="Thêm vật tư" 
                 color="blue" 
                 onClick={() => setActiveTab('inventory')} 
+                darkMode={darkMode}
               />
               <QuickActionButton 
                 icon={<ArrowLeftRight />} 
                 label="Giao dịch" 
                 color="emerald" 
                 onClick={() => setActiveTab('transactions')} 
+                darkMode={darkMode}
               />
               <QuickActionButton 
                 icon={<FileText />} 
                 label="Báo cáo" 
                 color="purple" 
                 onClick={() => setActiveTab('reports')} 
+                darkMode={darkMode}
               />
               <QuickActionButton 
                 icon={<Download />} 
                 label="Nhập Excel" 
                 color="amber" 
                 onClick={() => setActiveTab('inventory')} 
+                darkMode={darkMode}
               />
               <QuickActionButton 
                 icon={<BrainCircuit />} 
                 label="Trợ lý AI" 
                 color="pink" 
                 onClick={() => setActiveTab('assistant')} 
+                darkMode={darkMode}
               />
             </div>
             
-            <div className="mt-8 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+            <div className={`mt-8 p-4 rounded-2xl border ${darkMode ? 'bg-slate-700/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
               <div className="flex items-center justify-between mb-4">
-                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Tiêu thụ nhiều nhất</h4>
+                <h4 className={`text-xs font-bold uppercase tracking-wider ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Tiêu thụ nhiều nhất</h4>
                 <TrendingDown className="w-3 h-3 text-red-500" />
               </div>
               <div className="space-y-3">
                 {topConsumed.map((item, idx) => (
                   <div key={idx} className="flex items-center justify-between">
-                    <span className="text-sm text-slate-700 truncate max-w-[120px]">{item.name}</span>
-                    <span className="text-xs font-bold text-slate-900">{item.total} {item.unit}</span>
+                    <span className={`text-sm truncate max-w-[120px] ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>{item.name}</span>
+                    <span className={`text-xs font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>{item.total} {item.unit}</span>
                   </div>
                 ))}
                 {topConsumed.length === 0 && <p className="text-xs text-slate-400 italic">Chưa có dữ liệu xuất kho.</p>}
@@ -918,20 +1029,20 @@ function Dashboard({
       {/* Main Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <motion.div variants={itemVariants} className="lg:col-span-2 min-w-0">
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm min-w-0">
+          <div className={`p-6 rounded-2xl border shadow-sm min-w-0 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
             <div className="flex items-center justify-between mb-8">
               <div>
-                <h3 className="text-lg font-bold text-slate-900">Lưu lượng giao dịch</h3>
-                <p className="text-xs text-slate-500">Thống kê nhập/xuất trong 7 ngày gần nhất</p>
+                <h3 className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>Lưu lượng giao dịch</h3>
+                <p className={`text-xs ${darkMode ? 'text-slate-500' : 'text-slate-500'}`}>Thống kê nhập/xuất trong 7 ngày gần nhất</p>
               </div>
               <div className="flex items-center gap-4 text-xs font-semibold">
                 <div className="flex items-center gap-1.5">
                   <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                  <span className="text-slate-600">Nhập kho</span>
+                  <span className={darkMode ? 'text-slate-400' : 'text-slate-600'}>Nhập kho</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
-                  <span className="text-slate-600">Xuất kho</span>
+                  <span className={darkMode ? 'text-slate-400' : 'text-slate-600'}>Xuất kho</span>
                 </div>
               </div>
             </div>
@@ -948,21 +1059,28 @@ function Dashboard({
                       <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={darkMode ? "#334155" : "#f1f5f9"} />
                   <XAxis 
                     dataKey="date" 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{fill: '#64748b', fontSize: 12}} 
+                    tick={{fill: darkMode ? '#94a3b8' : '#64748b', fontSize: 12}} 
                     dy={10}
                   />
                   <YAxis 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{fill: '#64748b', fontSize: 12}} 
+                    tick={{fill: darkMode ? '#94a3b8' : '#64748b', fontSize: 12}} 
                   />
                   <Tooltip 
-                    contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)'}}
+                    contentStyle={{
+                      borderRadius: '16px', 
+                      border: 'none', 
+                      boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)',
+                      backgroundColor: darkMode ? '#1e293b' : '#ffffff',
+                      color: darkMode ? '#ffffff' : '#000000'
+                    }}
+                    itemStyle={{ color: darkMode ? '#cbd5e1' : '#475569' }}
                   />
                   <Area 
                     type="monotone" 
@@ -987,9 +1105,9 @@ function Dashboard({
         </motion.div>
 
         <motion.div variants={itemVariants} className="min-w-0">
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col h-full min-w-0">
-            <h3 className="text-lg font-bold text-slate-900 mb-2">Tình trạng tồn kho</h3>
-            <p className="text-xs text-slate-500 mb-6">Phân loại vật tư theo mức độ an toàn</p>
+          <div className={`p-6 rounded-2xl border shadow-sm flex flex-col h-full min-w-0 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+            <h3 className={`text-lg font-bold mb-2 ${darkMode ? 'text-white' : 'text-slate-900'}`}>Tình trạng tồn kho</h3>
+            <p className={`text-xs mb-6 ${darkMode ? 'text-slate-500' : 'text-slate-500'}`}>Phân loại vật tư theo mức độ an toàn</p>
             <div className="flex-1 min-h-[250px] relative min-w-0">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -1008,23 +1126,30 @@ function Dashboard({
                     ))}
                   </Pie>
                   <Tooltip 
-                    contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)'}}
+                    contentStyle={{
+                      borderRadius: '16px', 
+                      border: 'none', 
+                      boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)',
+                      backgroundColor: darkMode ? '#1e293b' : '#ffffff',
+                      color: darkMode ? '#ffffff' : '#000000'
+                    }}
+                    itemStyle={{ color: darkMode ? '#cbd5e1' : '#475569' }}
                   />
                 </PieChart>
               </ResponsiveContainer>
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-3xl font-black text-slate-900">{items.length}</span>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Vật tư</span>
+                <span className={`text-3xl font-black ${darkMode ? 'text-white' : 'text-slate-900'}`}>{items.length}</span>
+                <span className={`text-[10px] font-bold uppercase tracking-widest ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>Vật tư</span>
               </div>
             </div>
             <div className="grid grid-cols-1 gap-3 mt-6">
               {statusData.map((item, idx) => (
-                <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
+                <div key={idx} className={`flex items-center justify-between p-3 rounded-xl border ${darkMode ? 'bg-slate-700/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
                   <div className="flex items-center gap-3">
                     <div className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: item.color}}></div>
-                    <span className="text-sm font-medium text-slate-600">{item.name}</span>
+                    <span className={`text-sm font-medium ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>{item.name}</span>
                   </div>
-                  <span className="text-sm font-bold text-slate-900">{item.value}</span>
+                  <span className={`text-sm font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>{item.value}</span>
                 </div>
               ))}
             </div>
@@ -1035,30 +1160,37 @@ function Dashboard({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Category Distribution Chart */}
         <motion.div variants={itemVariants} className="min-w-0">
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm min-w-0">
+          <div className={`p-6 rounded-2xl border shadow-sm min-w-0 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
             <div className="flex items-center justify-between mb-8">
               <div>
-                <h3 className="text-lg font-bold text-slate-900">Phân bổ theo nhóm</h3>
-                <p className="text-xs text-slate-500">Số lượng loại vật tư trong mỗi nhóm</p>
+                <h3 className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>Phân bổ theo nhóm</h3>
+                <p className={`text-xs ${darkMode ? 'text-slate-500' : 'text-slate-500'}`}>Số lượng loại vật tư trong mỗi nhóm</p>
               </div>
               <Filter className="w-4 h-4 text-slate-400" />
             </div>
             <div className="h-96 min-w-0">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={categoryData.slice(0, 5)} layout="vertical" margin={{ left: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={darkMode ? "#334155" : "#f1f5f9"} />
                   <XAxis type="number" hide />
                   <YAxis 
                     dataKey="name" 
                     type="category" 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{fill: '#64748b', fontSize: 11}} 
+                    tick={{fill: darkMode ? '#94a3b8' : '#64748b', fontSize: 11}} 
                     width={120}
                   />
                   <Tooltip 
-                    cursor={{fill: '#f8fafc'}}
-                    contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)'}}
+                    cursor={{fill: darkMode ? '#334155' : '#f8fafc'}}
+                    contentStyle={{
+                      borderRadius: '16px', 
+                      border: 'none', 
+                      boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)',
+                      backgroundColor: darkMode ? '#1e293b' : '#ffffff',
+                      color: darkMode ? '#ffffff' : '#000000'
+                    }}
+                    itemStyle={{ color: darkMode ? '#cbd5e1' : '#475569' }}
                   />
                   <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={24}>
                     {categoryData.map((_, index) => (
@@ -1073,15 +1205,15 @@ function Dashboard({
 
         {/* Alerts & Recent Transactions */}
         <motion.div variants={itemVariants}>
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm h-full">
+          <div className={`p-6 rounded-2xl border shadow-sm h-full ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
             <div className="flex items-center justify-between mb-8">
               <div>
-                <h3 className="text-lg font-bold text-slate-900">Cảnh báo & Gần đây</h3>
-                <p className="text-xs text-slate-500">Các sự kiện cần chú ý trong kho</p>
+                <h3 className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>Cảnh báo & Gần đây</h3>
+                <p className={`text-xs ${darkMode ? 'text-slate-500' : 'text-slate-500'}`}>Các sự kiện cần chú ý trong kho</p>
               </div>
               <button 
                 onClick={() => setActiveTab('transactions')}
-                className="text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg transition-colors"
+                className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${darkMode ? 'text-blue-400 hover:text-blue-300 bg-blue-900/30' : 'text-blue-600 hover:text-blue-700 bg-blue-50'}`}
               >
                 Xem tất cả
               </button>
@@ -1094,15 +1226,15 @@ function Dashboard({
                     initial={{ x: -20, opacity: 0 }}
                     animate={{ x: 0, opacity: 1 }}
                     transition={{ delay: idx * 0.1 }}
-                    className="flex items-center gap-4 p-4 rounded-2xl bg-amber-50 border border-amber-100 group hover:bg-amber-100 transition-colors cursor-pointer"
+                    className={`flex items-center gap-4 p-4 rounded-2xl border group transition-colors cursor-pointer ${darkMode ? 'bg-amber-900/20 border-amber-900/30 hover:bg-amber-900/30' : 'bg-amber-50 border-amber-100 hover:bg-amber-100'}`}
                     onClick={() => setActiveTab('inventory')}
                   >
-                    <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
                       <AlertTriangle className="w-6 h-6 text-amber-600" />
                     </div>
                     <div className="flex-1">
-                      <p className="text-sm font-bold text-slate-900">{item.name}</p>
-                      <p className="text-xs text-slate-500">Tồn kho thấp: <span className="font-bold text-amber-700">{item.currentStock} {item.unit}</span> (Tối thiểu: {item.minStock})</p>
+                      <p className={`text-sm font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>{item.name}</p>
+                      <p className={`text-xs ${darkMode ? 'text-slate-500' : 'text-slate-500'}`}>Tồn kho thấp: <span className={`font-bold ${darkMode ? 'text-amber-400' : 'text-amber-700'}`}>{item.currentStock} {item.unit}</span> (Tối thiểu: {item.minStock})</p>
                     </div>
                     <ArrowUpRight className="w-4 h-4 text-slate-400 group-hover:text-amber-600" />
                   </motion.div>
@@ -1115,19 +1247,19 @@ function Dashboard({
                       initial={{ x: -20, opacity: 0 }}
                       animate={{ x: 0, opacity: 1 }}
                       transition={{ delay: (lowStockItems.length + idx) * 0.1 }}
-                      className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100 group hover:bg-white hover:shadow-md transition-all cursor-pointer"
+                      className={`flex items-center gap-4 p-4 rounded-2xl border group transition-all cursor-pointer ${darkMode ? 'bg-slate-700/30 border-slate-700 hover:bg-slate-700/50 hover:shadow-lg hover:shadow-black/20' : 'bg-slate-50 border-slate-100 hover:bg-white hover:shadow-md'}`}
                       onClick={() => setActiveTab('transactions')}
                     >
-                      <div className={`w-12 h-12 rounded-xl ${t.type === 'IN' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'} flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform`}>
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform ${t.type === 'IN' ? (darkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-blue-600') : (darkMode ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-600')}`}>
                         {t.type === 'IN' ? <ArrowUpRight className="w-6 h-6" /> : <ArrowDownRight className="w-6 h-6" />}
                       </div>
                       <div className="flex-1">
-                        <p className="text-sm font-bold text-slate-900">{item?.name || 'Vật tư đã xóa'}</p>
-                        <p className="text-xs text-slate-500">{t.type === 'IN' ? 'Nhập kho' : 'Xuất kho'}: <span className={`font-bold ${t.type === 'IN' ? 'text-blue-600' : 'text-emerald-600'}`}>{t.quantity} {item?.unit}</span></p>
+                        <p className={`text-sm font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>{item?.name || 'Vật tư đã xóa'}</p>
+                        <p className={`text-xs ${darkMode ? 'text-slate-500' : 'text-slate-500'}`}>{t.type === 'IN' ? 'Nhập kho' : 'Xuất kho'}: <span className={`font-bold ${t.type === 'IN' ? 'text-blue-600' : 'text-emerald-600'}`}>{t.quantity} {item?.unit}</span></p>
                       </div>
                       <div className="text-right">
-                        <span className="text-[10px] font-bold text-slate-400 block uppercase">{new Date(t.timestamp?.toDate ? t.timestamp.toDate() : t.timestamp).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}</span>
-                        <Clock className="w-3 h-3 text-slate-300 ml-auto mt-1" />
+                        <span className={`text-[10px] font-bold block uppercase ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>{new Date(t.timestamp?.toDate ? t.timestamp.toDate() : t.timestamp).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}</span>
+                        <Clock className={`w-3 h-3 ml-auto mt-1 ${darkMode ? 'text-slate-600' : 'text-slate-300'}`} />
                       </div>
                     </motion.div>
                   );
@@ -1135,10 +1267,10 @@ function Dashboard({
               </AnimatePresence>
               {lowStockItems.length === 0 && transactions.length === 0 && (
                 <div className="text-center py-20">
-                  <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <CheckCircle2 className="w-10 h-10 text-slate-200" />
+                  <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 ${darkMode ? 'bg-slate-700' : 'bg-slate-50'}`}>
+                    <CheckCircle2 className={`w-10 h-10 ${darkMode ? 'text-slate-600' : 'text-slate-200'}`} />
                   </div>
-                  <p className="text-slate-400 text-sm font-medium">Kho hàng đang ở trạng thái lý tưởng.</p>
+                  <p className={`text-sm font-medium ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>Kho hàng đang ở trạng thái lý tưởng.</p>
                 </div>
               )}
             </div>
@@ -1149,13 +1281,13 @@ function Dashboard({
   );
 }
 
-function QuickActionButton({ icon, label, color, onClick }: { icon: any, label: string, color: string, onClick: () => void }) {
+function QuickActionButton({ icon, label, color, onClick, darkMode }: { icon: any, label: string, color: string, onClick: () => void, darkMode?: boolean }) {
   const colors: any = {
-    blue: 'bg-blue-50 text-blue-600 hover:bg-blue-100 border-blue-100',
-    emerald: 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-100',
-    purple: 'bg-purple-50 text-purple-600 hover:bg-purple-100 border-purple-100',
-    amber: 'bg-amber-50 text-amber-600 hover:bg-amber-100 border-amber-100',
-    pink: 'bg-pink-50 text-pink-600 hover:bg-pink-100 border-pink-100',
+    blue: darkMode ? 'bg-blue-900/30 text-blue-400 border-blue-800/50 hover:bg-blue-900/50' : 'bg-blue-50 text-blue-600 hover:bg-blue-100 border-blue-100',
+    emerald: darkMode ? 'bg-emerald-900/30 text-emerald-400 border-emerald-800/50 hover:bg-emerald-900/50' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-100',
+    purple: darkMode ? 'bg-purple-900/30 text-purple-400 border-purple-800/50 hover:bg-purple-900/50' : 'bg-purple-50 text-purple-600 hover:bg-purple-100 border-purple-100',
+    amber: darkMode ? 'bg-amber-900/30 text-amber-400 border-amber-800/50 hover:bg-amber-900/50' : 'bg-amber-50 text-amber-600 hover:bg-amber-100 border-amber-100',
+    pink: darkMode ? 'bg-pink-900/30 text-pink-400 border-pink-800/50 hover:bg-pink-900/50' : 'bg-pink-50 text-pink-600 hover:bg-pink-100 border-pink-100',
   };
 
   return (
@@ -1163,7 +1295,7 @@ function QuickActionButton({ icon, label, color, onClick }: { icon: any, label: 
       onClick={onClick}
       className={`flex flex-col items-center justify-center gap-3 p-4 rounded-2xl border transition-all active:scale-95 ${colors[color]}`}
     >
-      <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
+      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
         {React.cloneElement(icon, { className: 'w-5 h-5' })}
       </div>
       <span className="text-xs font-bold tracking-tight">{label}</span>
@@ -1171,23 +1303,23 @@ function QuickActionButton({ icon, label, color, onClick }: { icon: any, label: 
   );
 }
 
-function StatCard({ label, value, icon, color, trend, isUp }: { label: string, value: string | number, icon: any, color: string, trend?: string, isUp?: boolean }) {
+function StatCard({ label, value, icon, color, trend, isUp, darkMode }: { label: string, value: string | number, icon: any, color: string, trend?: string, isUp?: boolean, darkMode?: boolean }) {
   return (
-    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden group hover:border-blue-200 transition-colors">
+    <div className={`p-6 rounded-2xl border shadow-sm relative overflow-hidden group transition-colors ${darkMode ? 'bg-slate-800 border-slate-700 hover:border-blue-800' : 'bg-white border-slate-200 hover:border-blue-200'}`}>
       <div className="flex justify-between items-start mb-4">
         <div className={`w-12 h-12 ${color} rounded-xl flex items-center justify-center transition-transform group-hover:scale-110`}>
           {icon}
         </div>
         {trend && (
-          <div className={`flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg ${isUp ? 'text-emerald-600 bg-emerald-50' : 'text-red-600 bg-red-50'}`}>
+          <div className={`flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg ${isUp ? (darkMode ? 'text-emerald-400 bg-emerald-900/30' : 'text-emerald-600 bg-emerald-50') : (darkMode ? 'text-red-400 bg-red-900/30' : 'text-red-600 bg-red-50')}`}>
             {isUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
             {trend}
           </div>
         )}
       </div>
       <div>
-        <p className="text-sm font-medium text-slate-500 mb-1">{label}</p>
-        <p className="text-3xl font-bold text-slate-900 tracking-tight">{value.toLocaleString()}</p>
+        <p className={`text-sm font-medium mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{label}</p>
+        <p className={`text-3xl font-bold tracking-tight ${darkMode ? 'text-white' : 'text-slate-900'}`}>{value.toLocaleString()}</p>
       </div>
       <div className="absolute -right-4 -bottom-4 opacity-[0.03] group-hover:opacity-[0.06] transition-opacity">
         {React.cloneElement(icon, { size: 100 })}
@@ -1196,10 +1328,13 @@ function StatCard({ label, value, icon, color, trend, isUp }: { label: string, v
   );
 }
 
-function Inventory({ items, categories, globalSearch }: { items: Item[], categories: Category[], globalSearch: string }) {
+function Inventory({ items, categories, globalSearch, darkMode }: { items: Item[], categories: Category[], globalSearch: string, darkMode?: boolean }) {
   const [showAdd, setShowAdd] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [newItem, setNewItem] = useState({ name: '', categoryId: '', unit: '', minStock: '0', currentStock: '0', expiryDate: '', price: '0' });
+  const [editingItem, setEditingItem] = useState<Item | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', categoryId: '', unit: '', minStock: '0', expiryDate: '', price: '0' });
   const [nameSuggestions, setNameSuggestions] = useState<Item[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
@@ -1275,6 +1410,40 @@ function Inventory({ items, categories, globalSearch }: { items: Item[], categor
     }
   };
 
+  const handleEdit = (item: Item) => {
+    setEditingItem(item);
+    setEditForm({
+      name: item.name,
+      categoryId: item.categoryId,
+      unit: item.unit,
+      minStock: item.minStock.toString(),
+      expiryDate: item.expiryDate || '',
+      price: (item.price || 0).toString()
+    });
+    setShowEdit(true);
+  };
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingItem) return;
+    try {
+      const minStock = parseFloat(editForm.minStock) || 0;
+      const price = parseFloat(editForm.price) || 0;
+
+      await updateDoc(doc(db, "items", editingItem.id), {
+        ...editForm,
+        minStock,
+        price
+      });
+
+      setShowEdit(false);
+      setEditingItem(null);
+      toast.success("Cập nhật vật tư thành công!");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `items/${editingItem.id}`);
+    }
+  };
+
   const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1340,10 +1509,10 @@ function Inventory({ items, categories, globalSearch }: { items: Item[], categor
             handleFirestoreError(err, OperationType.CREATE, "items");
           }
         }
-        alert(`Đã nhập thành công ${data.length} vật tư.`);
+        toast.success(`Đã nhập thành công ${data.length} vật tư.`);
       } catch (error) {
         console.error("Import Error:", error);
-        alert("Có lỗi xảy ra khi nhập file Excel. Vui lòng kiểm tra lại định dạng file.");
+        toast.error("Có lỗi xảy ra khi nhập file Excel. Vui lòng kiểm tra lại định dạng file.");
       } finally {
         setIsImporting(false);
         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -1386,10 +1555,10 @@ function Inventory({ items, categories, globalSearch }: { items: Item[], categor
       }
       setSelectedIds([]);
       setShowDeleteConfirm(false);
-      alert(`Đã xóa thành công ${selectedIds.length} vật tư.`);
+      toast.success(`Đã xóa thành công ${selectedIds.length} vật tư.`);
     } catch (error) {
       console.error("Delete Error:", error);
-      alert("Có lỗi xảy ra khi xóa vật tư.");
+      toast.error("Có lỗi xảy ra khi xóa vật tư.");
     }
   };
 
@@ -1468,19 +1637,19 @@ function Inventory({ items, categories, globalSearch }: { items: Item[], categor
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
           <div className="flex flex-wrap gap-2 flex-1 w-full">
             <div className="relative flex-1 min-w-[200px]">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Search className={`w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`} />
               <input 
                 type="text" 
                 placeholder="Tìm tên vật tư..." 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                className={`w-full pl-10 pr-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-900'}`}
               />
             </div>
             <select 
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+              className={`px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'}`}
             >
               <option value="all">Tất cả trạng thái</option>
               <option value="low">Sắp hết hàng</option>
@@ -1499,18 +1668,18 @@ function Inventory({ items, categories, globalSearch }: { items: Item[], categor
             <button 
               onClick={() => fileInputRef.current?.click()}
               disabled={isImporting}
-              className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-slate-50 transition-colors disabled:opacity-50"
+              className={`px-4 py-2 border rounded-lg text-sm font-medium flex items-center gap-2 transition-colors disabled:opacity-50 ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
             >
               {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4 rotate-180" />}
               Nhập Excel
             </button>
-            <button className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-slate-50 transition-colors">
+            <button className={`px-4 py-2 border rounded-lg text-sm font-medium flex items-center gap-2 transition-colors ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
               <Download className="w-4 h-4" /> Xuất Excel
             </button>
             {selectedIds.length > 0 && (
               <button 
                 onClick={() => setShowDeleteConfirm(true)}
-                className="px-4 py-2 bg-red-50 text-red-600 border border-red-100 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-red-100 transition-colors"
+                className={`px-4 py-2 border rounded-lg text-sm font-medium flex items-center gap-2 transition-colors ${darkMode ? 'bg-red-900/20 text-red-400 border-red-800/30 hover:bg-red-900/30' : 'bg-red-50 text-red-600 border-red-100 hover:bg-red-100'}`}
               >
                 <Trash2 className="w-4 h-4" /> Xóa ({selectedIds.length})
               </button>
@@ -1531,11 +1700,11 @@ function Inventory({ items, categories, globalSearch }: { items: Item[], categor
             className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap border flex items-center gap-2 ${
               filterCategoryName === '' 
                 ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-100' 
-                : 'bg-white text-slate-500 border-slate-200 hover:border-blue-300 hover:text-blue-600'
+                : (darkMode ? 'bg-slate-800 text-slate-400 border-slate-700 hover:border-blue-800 hover:text-blue-400' : 'bg-white text-slate-500 border-slate-200 hover:border-blue-300 hover:text-blue-600')
             }`}
           >
             Tất cả nhóm
-            <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${filterCategoryName === '' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400'}`}>
+            <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${filterCategoryName === '' ? 'bg-white/20 text-white' : (darkMode ? 'bg-slate-700 text-slate-500' : 'bg-slate-100 text-slate-400')}`}>
               {items.length}
             </span>
           </button>
@@ -1552,11 +1721,11 @@ function Inventory({ items, categories, globalSearch }: { items: Item[], categor
                 className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap border flex items-center gap-2 ${
                   filterCategoryName.trim().toLowerCase() === name.trim().toLowerCase()
                     ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-100' 
-                    : 'bg-white text-slate-500 border-slate-200 hover:border-blue-300 hover:text-blue-600'
+                    : (darkMode ? 'bg-slate-800 text-slate-400 border-slate-700 hover:border-blue-800 hover:text-blue-400' : 'bg-white text-slate-500 border-slate-200 hover:border-blue-300 hover:text-blue-600')
                 }`}
               >
                 {name}
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${filterCategoryName.trim().toLowerCase() === name.trim().toLowerCase() ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${filterCategoryName.trim().toLowerCase() === name.trim().toLowerCase() ? 'bg-white/20 text-white' : (darkMode ? 'bg-slate-700 text-slate-500' : 'bg-slate-100 text-slate-400')}`}>
                   {count}
                 </span>
               </button>
@@ -1565,30 +1734,30 @@ function Inventory({ items, categories, globalSearch }: { items: Item[], categor
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className={`rounded-2xl border shadow-sm overflow-hidden ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="bg-slate-50 border-b border-slate-200">
+            <tr className={`border-b ${darkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
               <th className="px-6 py-4 w-10">
                 <input 
                   type="checkbox" 
-                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  className={`rounded focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-blue-500' : 'border-slate-300 text-blue-600'}`}
                   checked={filteredAndSortedItems.length > 0 && selectedIds.length === filteredAndSortedItems.length}
                   onChange={toggleSelectAll}
                 />
               </th>
               <th 
-                className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors"
+                className={`px-6 py-4 text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors ${darkMode ? 'text-slate-400 hover:bg-slate-700' : 'text-slate-500 hover:bg-slate-100'}`}
                 onClick={() => handleSort('name')}
               >
                 <div className="flex items-center gap-1">
                   Tên vật tư {sortKey === 'name' && (sortOrder === 'asc' ? '↑' : '↓')}
                 </div>
               </th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Nhóm</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Đơn vị</th>
+              <th className={`px-6 py-4 text-xs font-bold uppercase tracking-wider ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Nhóm</th>
+              <th className={`px-6 py-4 text-xs font-bold uppercase tracking-wider ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Đơn vị</th>
               <th 
-                className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors"
+                className={`px-6 py-4 text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors ${darkMode ? 'text-slate-400 hover:bg-slate-700' : 'text-slate-500 hover:bg-slate-100'}`}
                 onClick={() => handleSort('price')}
               >
                 <div className="flex items-center gap-1">
@@ -1596,7 +1765,7 @@ function Inventory({ items, categories, globalSearch }: { items: Item[], categor
                 </div>
               </th>
               <th 
-                className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors"
+                className={`px-6 py-4 text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors ${darkMode ? 'text-slate-400 hover:bg-slate-700' : 'text-slate-500 hover:bg-slate-100'}`}
                 onClick={() => handleSort('currentStock')}
               >
                 <div className="flex items-center gap-1">
@@ -1604,17 +1773,17 @@ function Inventory({ items, categories, globalSearch }: { items: Item[], categor
                 </div>
               </th>
               <th 
-                className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors"
+                className={`px-6 py-4 text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors ${darkMode ? 'text-slate-400 hover:bg-slate-700' : 'text-slate-500 hover:bg-slate-100'}`}
                 onClick={() => handleSort('expiryDate')}
               >
                 <div className="flex items-center gap-1">
                   Hạn dùng {sortKey === 'expiryDate' && (sortOrder === 'asc' ? '↑' : '↓')}
                 </div>
               </th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Trạng thái</th>
+              <th className={`px-6 py-4 text-xs font-bold uppercase tracking-wider text-center ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Trạng thái</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
             {filteredAndSortedItems.map(item => {
               const category = categories.find(c => c.id === item.categoryId);
               const isLow = item.currentStock <= item.minStock;
@@ -1626,34 +1795,45 @@ function Inventory({ items, categories, globalSearch }: { items: Item[], categor
                 (expiryDate.getTime() - now.getTime()) > 0;
 
               return (
-                <tr key={item.id} className={`hover:bg-slate-50 transition-colors ${isExpired ? 'bg-red-50/30' : isNearingExpiry ? 'bg-orange-50/30' : ''} ${selectedIds.includes(item.id) ? 'bg-blue-50/50' : ''}`}>
+                <tr key={item.id} className={`transition-colors ${darkMode ? 'hover:bg-slate-700/50' : 'hover:bg-slate-50'} ${isExpired ? (darkMode ? 'bg-red-900/10' : 'bg-red-50/30') : isNearingExpiry ? (darkMode ? 'bg-orange-900/10' : 'bg-orange-50/30') : ''} ${selectedIds.includes(item.id) ? (darkMode ? 'bg-blue-900/20' : 'bg-blue-50/50') : ''}`}>
                   <td className="px-6 py-4">
                     <input 
                       type="checkbox" 
-                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      className={`rounded focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-blue-500' : 'border-slate-300 text-blue-600'}`}
                       checked={selectedIds.includes(item.id)}
                       onChange={() => toggleSelect(item.id)}
                     />
                   </td>
-                  <td className="px-6 py-4 font-medium text-slate-900">
-                    <div className="flex items-center gap-2">
+                  <td className={`px-6 py-4 font-medium ${darkMode ? 'text-white' : 'text-slate-900'}`}>
+                    <div className="flex items-center gap-2 group">
                       {item.name}
+                      <button 
+                        onClick={() => handleEdit(item)}
+                        className={`opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/30 ${darkMode ? 'text-slate-500 hover:text-blue-400' : 'text-slate-400 hover:text-blue-600'}`}
+                        title="Chỉnh sửa nhanh"
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </button>
                       {isExpired && <span title="Đã hết hạn"><AlertTriangle className="w-4 h-4 text-red-600" /></span>}
                       {isNearingExpiry && <span title="Sắp hết hạn"><AlertTriangle className="w-4 h-4 text-orange-600" /></span>}
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-slate-500">{category?.name || 'N/A'}</td>
-                  <td className="px-6 py-4 text-slate-500">{item.unit}</td>
-                  <td className="px-6 py-4 text-slate-500">{(item.price || 0).toLocaleString('vi-VN')} đ</td>
-                  <td className="px-6 py-4 font-bold text-slate-900">{item.currentStock}</td>
-                  <td className={`px-6 py-4 font-medium ${isExpired ? 'text-red-600' : isNearingExpiry ? 'text-orange-600' : 'text-slate-500'}`}>
+                  <td className={`px-6 py-4 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{category?.name || 'N/A'}</td>
+                  <td className={`px-6 py-4 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{item.unit}</td>
+                  <td className={`px-6 py-4 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{(item.price || 0).toLocaleString('vi-VN')} đ</td>
+                  <td className={`px-6 py-4 font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>{item.currentStock}</td>
+                  <td className={`px-6 py-4 font-medium ${isExpired ? 'text-red-600' : isNearingExpiry ? 'text-orange-600' : (darkMode ? 'text-slate-400' : 'text-slate-500')}`}>
                     {formatDate(item.expiryDate)}
                   </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${
-                      isExpired ? 'bg-red-100 text-red-600' : 
-                      isNearingExpiry ? 'bg-orange-100 text-orange-600' :
-                      isLow ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'
+                  <td className="px-6 py-4 text-center">
+                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase whitespace-nowrap border ${
+                      isExpired 
+                        ? (darkMode ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-red-100 text-red-600 border-red-200') : 
+                      isNearingExpiry 
+                        ? (darkMode ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' : 'bg-orange-100 text-orange-600 border-orange-200') :
+                      isLow 
+                        ? (darkMode ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-100 text-amber-600 border-amber-200') : 
+                        (darkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-100 text-emerald-600 border-emerald-200')
                     }`}>
                       {isExpired ? 'Hết hạn' : isNearingExpiry ? 'Sắp hết hạn' : isLow ? 'Cần nhập' : 'An toàn'}
                     </span>
@@ -1672,34 +1852,34 @@ function Inventory({ items, categories, globalSearch }: { items: Item[], categor
 
       {showAdd && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
+          <div className={`rounded-2xl shadow-2xl w-full max-w-md p-8 border ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-slate-900">Thêm vật tư mới</h3>
-              <button onClick={() => setShowAdd(false)} className="text-slate-400 hover:text-slate-600"><X /></button>
+              <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>Thêm vật tư mới</h3>
+              <button onClick={() => setShowAdd(false)} className={`transition-colors ${darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-400 hover:text-slate-600'}`}><X /></button>
             </div>
             <form onSubmit={handleAdd} className="space-y-4">
               <div className="relative">
-                <label className="block text-sm font-medium text-slate-700 mb-1">Tên vật tư</label>
+                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Tên vật tư</label>
                 <input 
                   required 
                   type="text" 
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500" 
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-900'}`} 
                   value={newItem.name} 
                   onChange={e => setNewItem({...newItem, name: e.target.value})}
                   onFocus={() => newItem.name.length > 0 && setShowSuggestions(true)}
                   onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                 />
                 {showSuggestions && (
-                  <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden">
+                  <div className={`absolute z-10 w-full mt-1 border rounded-lg shadow-xl overflow-hidden ${darkMode ? 'bg-slate-700 border-slate-600' : 'bg-white border-slate-200'}`}>
                     {nameSuggestions.map(suggestion => (
                       <button
                         key={suggestion.id}
                         type="button"
                         onClick={() => handleSelectSuggestion(suggestion)}
-                        className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex flex-col border-b border-slate-50 last:border-0"
+                        className={`w-full px-4 py-2 text-left text-sm flex flex-col border-b last:border-0 ${darkMode ? 'hover:bg-slate-600 border-slate-600' : 'hover:bg-slate-50 border-slate-50'}`}
                       >
-                        <span className="font-bold text-slate-900">{suggestion.name}</span>
-                        <span className="text-[10px] text-slate-500">
+                        <span className={`font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>{suggestion.name}</span>
+                        <span className={`text-[10px] ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                           {categories.find(c => c.id === suggestion.categoryId)?.name} • {suggestion.unit}
                         </span>
                       </button>
@@ -1708,8 +1888,8 @@ function Inventory({ items, categories, globalSearch }: { items: Item[], categor
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Nhóm vật tư</label>
-                <select required className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500" value={newItem.categoryId} onChange={e => setNewItem({...newItem, categoryId: e.target.value})}>
+                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Nhóm vật tư</label>
+                <select required className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-200 text-slate-900'}`} value={newItem.categoryId} onChange={e => setNewItem({...newItem, categoryId: e.target.value})}>
                   <option value="">Chọn nhóm...</option>
                   {uniqueCategories.map(cat => (
                     <option key={cat.id} value={cat.id}>{cat.name}</option>
@@ -1718,22 +1898,22 @@ function Inventory({ items, categories, globalSearch }: { items: Item[], categor
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Đơn vị</label>
-                  <input required type="text" className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500" value={newItem.unit} onChange={e => setNewItem({...newItem, unit: e.target.value})} />
+                  <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Đơn vị</label>
+                  <input required type="text" className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-200 text-slate-900'}`} value={newItem.unit} onChange={e => setNewItem({...newItem, unit: e.target.value})} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Đơn giá (đ)</label>
-                  <input required type="number" step="any" className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} />
+                  <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Đơn giá (đ)</label>
+                  <input required type="number" step="any" className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-200 text-slate-900'}`} value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Tồn tối thiểu</label>
-                  <input required type="number" step="any" className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500" value={newItem.minStock} onChange={e => setNewItem({...newItem, minStock: e.target.value})} />
+                  <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Tồn tối thiểu</label>
+                  <input required type="number" step="any" className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-200 text-slate-900'}`} value={newItem.minStock} onChange={e => setNewItem({...newItem, minStock: e.target.value})} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Hạn sử dụng</label>
-                  <input type="date" className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500" value={newItem.expiryDate} onChange={e => setNewItem({...newItem, expiryDate: e.target.value})} />
+                  <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Hạn sử dụng</label>
+                  <input type="date" className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-200 text-slate-900'}`} value={newItem.expiryDate} onChange={e => setNewItem({...newItem, expiryDate: e.target.value})} />
                 </div>
               </div>
               <button type="submit" className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-lg shadow-blue-100">Lưu vật tư</button>
@@ -1742,18 +1922,71 @@ function Inventory({ items, categories, globalSearch }: { items: Item[], categor
         </div>
       )}
 
+      {showEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className={`rounded-2xl shadow-2xl w-full max-w-md p-8 border ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
+            <div className="flex justify-between items-center mb-6">
+              <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>Chỉnh sửa vật tư</h3>
+              <button onClick={() => setShowEdit(false)} className={`transition-colors ${darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-400 hover:text-slate-600'}`}><X /></button>
+            </div>
+            <form onSubmit={handleUpdate} className="space-y-4">
+              <div>
+                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Tên vật tư</label>
+                <input 
+                  required 
+                  type="text" 
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-900'}`} 
+                  value={editForm.name} 
+                  onChange={e => setEditForm({...editForm, name: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Nhóm vật tư</label>
+                <select required className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-200 text-slate-900'}`} value={editForm.categoryId} onChange={e => setEditForm({...editForm, categoryId: e.target.value})}>
+                  <option value="">Chọn nhóm...</option>
+                  {uniqueCategories.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Đơn vị</label>
+                  <input required type="text" className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-200 text-slate-900'}`} value={editForm.unit} onChange={e => setEditForm({...editForm, unit: e.target.value})} />
+                </div>
+                <div>
+                  <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Đơn giá (đ)</label>
+                  <input required type="number" step="any" className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-200 text-slate-900'}`} value={editForm.price} onChange={e => setEditForm({...editForm, price: e.target.value})} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Tồn tối thiểu</label>
+                  <input required type="number" step="any" className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-200 text-slate-900'}`} value={editForm.minStock} onChange={e => setEditForm({...editForm, minStock: e.target.value})} />
+                </div>
+                <div>
+                  <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Hạn sử dụng</label>
+                  <input type="date" className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-200 text-slate-900'}`} value={editForm.expiryDate} onChange={e => setEditForm({...editForm, expiryDate: e.target.value})} />
+                </div>
+              </div>
+              <button type="submit" className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-lg shadow-blue-100">Lưu thay đổi</button>
+            </form>
+          </div>
+        </div>
+      )}
+
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 text-center">
+          <div className={`rounded-2xl shadow-2xl w-full max-w-sm p-8 text-center border ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
             <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
               <Trash2 className="w-8 h-8" />
             </div>
-            <h3 className="text-xl font-bold text-slate-900 mb-2">Xác nhận xóa</h3>
-            <p className="text-slate-500 mb-8">Bạn có chắc chắn muốn xóa {selectedIds.length} vật tư đã chọn? Hành động này không thể hoàn tác.</p>
+            <h3 className={`text-xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-slate-900'}`}>Xác nhận xóa</h3>
+            <p className={`mb-8 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Bạn có chắc chắn muốn xóa {selectedIds.length} vật tư đã chọn? Hành động này không thể hoàn tác.</p>
             <div className="flex gap-3">
               <button 
                 onClick={() => setShowDeleteConfirm(false)}
-                className="flex-1 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-colors"
+                className={`flex-1 py-3 font-bold rounded-xl transition-colors ${darkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
               >
                 Hủy
               </button>
@@ -1771,12 +2004,14 @@ function Inventory({ items, categories, globalSearch }: { items: Item[], categor
   );
 }
 
-function Transactions({ transactions, items, departments, categories, globalSearch }: { transactions: Transaction[], items: Item[], departments: Department[], categories: Category[], globalSearch: string }) {
+function Transactions({ transactions, items, departments, categories, globalSearch, darkMode }: { transactions: Transaction[], items: Item[], departments: Department[], categories: Category[], globalSearch: string, darkMode?: boolean }) {
   const [showAdd, setShowAdd] = useState(false);
   const [newTrans, setNewTrans] = useState({ itemId: '', type: 'OUT' as any, quantity: '0', fromDeptId: '', toDeptId: '', note: '' });
   const [itemSearchTerm, setItemSearchTerm] = useState('');
   const [itemSuggestions, setItemSuggestions] = useState<Item[]>([]);
   const [showItemSuggestions, setShowItemSuggestions] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
 
   const filteredTransactions = useMemo(() => {
     if (!globalSearch) return transactions;
@@ -1812,7 +2047,7 @@ function Transactions({ transactions, items, departments, categories, globalSear
     const quantity = parseFloat(newTrans.quantity) || 0;
     let newStock = item.currentStock;
     if (newTrans.type === 'IN') newStock += quantity;
-    if (newTrans.type === 'OUT') newStock -= quantity;
+    if (newTrans.type === 'OUT' || newTrans.type === 'TRANSFER') newStock -= quantity;
 
     try {
       await addDoc(collection(db, "transactions"), {
@@ -1825,11 +2060,43 @@ function Transactions({ transactions, items, departments, categories, globalSear
         currentStock: newStock
       });
 
+      toast.success(`Đã ghi nhận giao dịch ${newTrans.type === 'IN' ? 'Nhập' : newTrans.type === 'OUT' ? 'Xuất' : 'Chuyển'} thành công!`);
       setShowAdd(false);
       setNewTrans({ itemId: '', type: 'OUT', quantity: '0', fromDeptId: '', toDeptId: '', note: '' });
       setItemSearchTerm('');
     } catch (err) {
+      toast.error('Lỗi khi ghi nhận giao dịch');
       handleFirestoreError(err, OperationType.WRITE, "transactions/items");
+    }
+  };
+
+  const confirmDelete = (transaction: Transaction) => {
+    setTransactionToDelete(transaction);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleDeleteTransaction = async () => {
+    if (!transactionToDelete) return;
+
+    try {
+      const item = items.find(i => i.id === transactionToDelete.itemId);
+      if (item) {
+        let newStock = item.currentStock;
+        if (transactionToDelete.type === 'IN') newStock -= transactionToDelete.quantity;
+        if (transactionToDelete.type === 'OUT' || transactionToDelete.type === 'TRANSFER') newStock += transactionToDelete.quantity;
+
+        await updateDoc(doc(db, "items", item.id), {
+          currentStock: newStock
+        });
+      }
+
+      await deleteDoc(doc(db, "transactions", transactionToDelete.id));
+      toast.success('Đã xóa giao dịch thành công!');
+      setShowDeleteConfirm(false);
+      setTransactionToDelete(null);
+    } catch (err) {
+      toast.error('Lỗi khi xóa giao dịch');
+      handleFirestoreError(err, OperationType.DELETE, `transactions/${transactionToDelete.id}`);
     }
   };
 
@@ -1844,28 +2111,29 @@ function Transactions({ transactions, items, departments, categories, globalSear
         </button>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className={`rounded-2xl border shadow-sm overflow-hidden ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="bg-slate-50 border-b border-slate-200">
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Thời gian</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Vật tư</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Loại</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Số lượng</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Thành tiền</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Phòng ban</th>
+            <tr className={`border-b ${darkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+              <th className={`px-6 py-4 text-xs font-bold uppercase tracking-wider ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Thời gian</th>
+              <th className={`px-6 py-4 text-xs font-bold uppercase tracking-wider ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Vật tư</th>
+              <th className={`px-6 py-4 text-xs font-bold uppercase tracking-wider ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Loại</th>
+              <th className={`px-6 py-4 text-xs font-bold uppercase tracking-wider ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Số lượng</th>
+              <th className={`px-6 py-4 text-xs font-bold uppercase tracking-wider ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Thành tiền</th>
+              <th className={`px-6 py-4 text-xs font-bold uppercase tracking-wider ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Phòng ban</th>
+              <th className={`px-6 py-4 text-xs font-bold uppercase tracking-wider text-right ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Thao tác</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
             {filteredTransactions.map(t => {
               const item = items.find(i => i.id === t.itemId);
               const toDept = departments.find(d => d.id === t.toDeptId);
               return (
-                <tr key={t.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4 text-sm text-slate-500">
+                <tr key={t.id} className={`transition-colors ${darkMode ? 'hover:bg-slate-700/50' : 'hover:bg-slate-50'}`}>
+                  <td className={`px-6 py-4 text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                     {formatTimestamp(t.timestamp)}
                   </td>
-                  <td className="px-6 py-4 font-medium text-slate-900">{item?.name || 'N/A'}</td>
+                  <td className={`px-6 py-4 font-medium ${darkMode ? 'text-white' : 'text-slate-900'}`}>{item?.name || 'N/A'}</td>
                   <td className="px-6 py-4">
                     <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${
                       t.type === 'IN' ? 'bg-emerald-100 text-emerald-600' : 
@@ -1874,9 +2142,17 @@ function Transactions({ transactions, items, departments, categories, globalSear
                       {t.type === 'IN' ? 'Nhập' : t.type === 'OUT' ? 'Xuất' : 'Chuyển'}
                     </span>
                   </td>
-                  <td className="px-6 py-4 font-bold text-slate-900">{t.quantity}</td>
-                  <td className="px-6 py-4 text-slate-500">{(t.quantity * (item?.price || 0)).toLocaleString('vi-VN')} đ</td>
-                  <td className="px-6 py-4 text-slate-500">{toDept?.name || '-'}</td>
+                  <td className={`px-6 py-4 font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>{t.quantity}</td>
+                  <td className={`px-6 py-4 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{(t.quantity * (item?.price || 0)).toLocaleString('vi-VN')} đ</td>
+                  <td className={`px-6 py-4 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{toDept?.name || '-'}</td>
+                  <td className="px-6 py-4 text-right">
+                    <button 
+                      onClick={() => confirmDelete(t)}
+                      className={`p-2 transition-colors ${darkMode ? 'text-slate-500 hover:text-red-400' : 'text-slate-400 hover:text-red-500'}`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </td>
                 </tr>
               );
             })}
@@ -1886,14 +2162,14 @@ function Transactions({ transactions, items, departments, categories, globalSear
 
       {showAdd && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
+          <div className={`rounded-2xl shadow-2xl w-full max-w-md p-8 border ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-slate-900">Ghi nhận giao dịch</h3>
-              <button onClick={() => setShowAdd(false)} className="text-slate-400 hover:text-slate-600"><X /></button>
+              <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>Ghi nhận giao dịch</h3>
+              <button onClick={() => setShowAdd(false)} className={`transition-colors ${darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-400 hover:text-slate-600'}`}><X /></button>
             </div>
             <form onSubmit={handleAdd} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Loại giao dịch</label>
+                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Loại giao dịch</label>
                 <div className="grid grid-cols-3 gap-2">
                   {['IN', 'OUT', 'TRANSFER'].map(type => (
                     <button 
@@ -1901,7 +2177,9 @@ function Transactions({ transactions, items, departments, categories, globalSear
                       type="button"
                       onClick={() => setNewTrans({...newTrans, type: type as any})}
                       className={`py-2 rounded-lg text-xs font-bold border transition-all ${
-                        newTrans.type === type ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-500 border-slate-200'
+                        newTrans.type === type 
+                          ? 'bg-blue-600 text-white border-blue-600' 
+                          : (darkMode ? 'bg-slate-700 text-slate-400 border-slate-600 hover:bg-slate-600' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50')
                       }`}
                     >
                       {type === 'IN' ? 'NHẬP' : type === 'OUT' ? 'XUẤT' : 'CHUYỂN'}
@@ -1910,12 +2188,12 @@ function Transactions({ transactions, items, departments, categories, globalSear
                 </div>
               </div>
               <div className="relative">
-                <label className="block text-sm font-medium text-slate-700 mb-1">Vật tư</label>
+                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Vật tư</label>
                 <input 
                   required 
                   type="text" 
                   placeholder="Nhập tên vật tư để tìm kiếm..."
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500" 
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-900'}`} 
                   value={itemSearchTerm} 
                   onChange={e => {
                     setItemSearchTerm(e.target.value);
@@ -1925,16 +2203,16 @@ function Transactions({ transactions, items, departments, categories, globalSear
                   onBlur={() => setTimeout(() => setShowItemSuggestions(false), 200)}
                 />
                 {showItemSuggestions && (
-                  <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden">
+                  <div className={`absolute z-10 w-full mt-1 border rounded-lg shadow-xl overflow-hidden ${darkMode ? 'bg-slate-700 border-slate-600' : 'bg-white border-slate-200'}`}>
                     {itemSuggestions.map(suggestion => (
                       <button
                         key={suggestion.id}
                         type="button"
                         onClick={() => handleSelectItem(suggestion)}
-                        className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex flex-col border-b border-slate-50 last:border-0"
+                        className={`w-full px-4 py-2 text-left text-sm flex flex-col border-b last:border-0 ${darkMode ? 'hover:bg-slate-600 border-slate-600' : 'hover:bg-slate-50 border-slate-50'}`}
                       >
-                        <span className="font-bold text-slate-900">{suggestion.name}</span>
-                        <span className="text-[10px] text-slate-500">
+                        <span className={`font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>{suggestion.name}</span>
+                        <span className={`text-[10px] ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                           {categories.find(c => c.id === suggestion.categoryId)?.name} • Tồn: {suggestion.currentStock} {suggestion.unit}
                         </span>
                       </button>
@@ -1946,23 +2224,52 @@ function Transactions({ transactions, items, departments, categories, globalSear
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Số lượng</label>
-                  <input required type="number" step="any" className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500" value={newTrans.quantity} onChange={e => setNewTrans({...newTrans, quantity: e.target.value})} />
+                  <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Số lượng</label>
+                  <input required type="number" step="any" className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-200 text-slate-900'}`} value={newTrans.quantity} onChange={e => setNewTrans({...newTrans, quantity: e.target.value})} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Đến phòng</label>
-                  <select className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500" value={newTrans.toDeptId} onChange={e => setNewTrans({...newTrans, toDeptId: e.target.value})}>
+                  <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Đến phòng</label>
+                  <select className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-200 text-slate-900'}`} value={newTrans.toDeptId} onChange={e => setNewTrans({...newTrans, toDeptId: e.target.value})}>
                     <option value="">Chọn phòng...</option>
                     {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                   </select>
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Ghi chú</label>
-                <textarea className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500" rows={2} value={newTrans.note} onChange={e => setNewTrans({...newTrans, note: e.target.value})}></textarea>
+                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Ghi chú</label>
+                <textarea className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-200 text-slate-900'}`} rows={2} value={newTrans.note} onChange={e => setNewTrans({...newTrans, note: e.target.value})}></textarea>
               </div>
               <button type="submit" className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-lg shadow-blue-100">Xác nhận</button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className={`rounded-2xl shadow-2xl w-full max-w-sm p-8 text-center border ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
+            <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-8 h-8" />
+            </div>
+            <h3 className={`text-xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-slate-900'}`}>Xác nhận xóa</h3>
+            <p className={`mb-8 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Bạn có chắc chắn muốn xóa giao dịch này không? Hành động này không thể hoàn tác.</p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setTransactionToDelete(null);
+                }}
+                className={`flex-1 py-3 font-bold rounded-xl transition-colors ${darkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+              >
+                Hủy
+              </button>
+              <button 
+                onClick={handleDeleteTransaction}
+                className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition-colors shadow-lg shadow-red-100"
+              >
+                Đồng ý
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1970,7 +2277,7 @@ function Transactions({ transactions, items, departments, categories, globalSear
   );
 }
 
-function InventoryAudit({ items, categories, globalSearch }: { items: Item[], categories: Category[], globalSearch: string }) {
+function InventoryAudit({ items, categories, globalSearch, darkMode }: { items: Item[], categories: Category[], globalSearch: string, darkMode?: boolean }) {
   const [auditDate, setAuditDate] = useState(new Date().toISOString().split('T')[0]);
   const [auditData, setAuditData] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
@@ -2058,34 +2365,34 @@ function InventoryAudit({ items, categories, globalSearch }: { items: Item[], ca
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+      <div className={`p-6 rounded-2xl border shadow-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex flex-col">
-              <label className="text-xs font-bold text-slate-500 uppercase mb-1">Ngày kiểm kê</label>
+              <label className={`text-xs font-bold uppercase mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Ngày kiểm kê</label>
               <input 
                 type="date" 
                 value={auditDate}
                 onChange={(e) => setAuditDate(e.target.value)}
-                className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                className={`px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`}
               />
             </div>
             <div className="flex flex-col">
-              <label className="text-xs font-bold text-slate-500 uppercase mb-1">Tìm kiếm</label>
+              <label className={`text-xs font-bold uppercase mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Tìm kiếm</label>
               <input 
                 type="text" 
                 placeholder="Tên vật tư..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                className={`px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-900'}`}
               />
             </div>
             <div className="flex flex-col">
-              <label className="text-xs font-bold text-slate-500 uppercase mb-1">Nhóm</label>
+              <label className={`text-xs font-bold uppercase mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Nhóm</label>
               <select 
                 value={filterCategory}
                 onChange={(e) => setFilterCategory(e.target.value)}
-                className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                className={`px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`}
               >
                 <option value="">Tất cả nhóm</option>
                 {uniqueCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -2103,19 +2410,19 @@ function InventoryAudit({ items, categories, globalSearch }: { items: Item[], ca
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className={`rounded-2xl border shadow-sm overflow-hidden ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="bg-slate-50 border-b border-slate-200">
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Vật tư</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Nhóm</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Đơn vị</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Tồn hiện tại</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center w-32">Tồn thực tế</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Tiêu hao</th>
+            <tr className={`border-b ${darkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+              <th className={`px-6 py-4 text-xs font-bold uppercase tracking-wider ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Vật tư</th>
+              <th className={`px-6 py-4 text-xs font-bold uppercase tracking-wider ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Nhóm</th>
+              <th className={`px-6 py-4 text-xs font-bold uppercase tracking-wider ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Đơn vị</th>
+              <th className={`px-6 py-4 text-xs font-bold uppercase tracking-wider text-center ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Tồn hiện tại</th>
+              <th className={`px-6 py-4 text-xs font-bold uppercase tracking-wider text-center w-32 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Tồn thực tế</th>
+              <th className={`px-6 py-4 text-xs font-bold uppercase tracking-wider text-center ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Tiêu hao</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
             {filteredItems.map(item => {
               const auditVal = auditData[item.id];
               const actual = auditVal === undefined || auditVal === '' ? item.currentStock : parseFloat(auditVal);
@@ -2123,11 +2430,11 @@ function InventoryAudit({ items, categories, globalSearch }: { items: Item[], ca
               const category = categories.find(c => c.id === item.categoryId);
               
               return (
-                <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4 font-medium text-slate-900">{item.name}</td>
-                  <td className="px-6 py-4 text-slate-500 text-sm">{category?.name}</td>
-                  <td className="px-6 py-4 text-slate-500 text-sm">{item.unit}</td>
-                  <td className="px-6 py-4 font-bold text-slate-900 text-center">{item.currentStock}</td>
+                <tr key={item.id} className={`transition-colors ${darkMode ? 'hover:bg-slate-700/50' : 'hover:bg-slate-50'}`}>
+                  <td className={`px-6 py-4 font-medium ${darkMode ? 'text-white' : 'text-slate-900'}`}>{item.name}</td>
+                  <td className={`px-6 py-4 text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{category?.name}</td>
+                  <td className={`px-6 py-4 text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{item.unit}</td>
+                  <td className={`px-6 py-4 font-bold text-center ${darkMode ? 'text-white' : 'text-slate-900'}`}>{item.currentStock}</td>
                   <td className="px-6 py-4 text-center">
                     <input 
                       type="number" 
@@ -2135,10 +2442,10 @@ function InventoryAudit({ items, categories, globalSearch }: { items: Item[], ca
                       value={auditData[item.id] ?? ''}
                       placeholder={item.currentStock.toString()}
                       onChange={(e) => handleActualChange(item.id, e.target.value)}
-                      className="w-20 px-2 py-1 text-center border border-slate-200 rounded focus:ring-2 focus:ring-blue-500 font-bold"
+                      className={`w-20 px-2 py-1 text-center border rounded focus:ring-2 focus:ring-blue-500 font-bold ${darkMode ? 'bg-slate-700 border-slate-600 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-900'}`}
                     />
                   </td>
-                  <td className={`px-6 py-4 font-bold text-center ${diff > 0 ? 'text-orange-600' : diff < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                  <td className={`px-6 py-4 font-bold text-center ${diff > 0 ? 'text-orange-600' : diff < 0 ? 'text-emerald-600' : (darkMode ? 'text-slate-500' : 'text-slate-400')}`}>
                     {diff > 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2)}
                   </td>
                 </tr>
@@ -2151,7 +2458,7 @@ function InventoryAudit({ items, categories, globalSearch }: { items: Item[], ca
   );
 }
 
-function InventoryPlanning({ items, transactions, categories, holidays, globalSearch }: { items: Item[], transactions: Transaction[], categories: Category[], holidays: Holiday[], globalSearch: string }) {
+function InventoryPlanning({ items, transactions, categories, holidays, globalSearch, darkMode }: { items: Item[], transactions: Transaction[], categories: Category[], holidays: Holiday[], globalSearch: string, darkMode?: boolean }) {
   const [planningDate, setPlanningDate] = useState(new Date().toISOString().split('T')[0]);
   const [forecastUntilDate, setForecastUntilDate] = useState(() => {
     const d = new Date();
@@ -2213,12 +2520,13 @@ function InventoryPlanning({ items, transactions, categories, holidays, globalSe
       const workingDaysInFuture = getWorkingDays(planningDateTime, forecastUntilDateTime, holidays);
 
       items.forEach(item => {
-        const itemTrans = transactions.filter(t => 
-          t.itemId === item.id && 
-          t.type === 'OUT' && 
-          t.timestamp?.toDate().getTime() >= windowDaysAgo.getTime() &&
-          t.timestamp?.toDate().getTime() <= planningDateTime.getTime()
-        );
+        const itemTrans = transactions.filter(t => {
+          if (!t.itemId || t.itemId !== item.id || t.type !== 'OUT') return false;
+          const ts = t.timestamp?.toDate ? t.timestamp.toDate().getTime() : 
+                     (t.timestamp?.seconds ? t.timestamp.seconds * 1000 : 
+                     (t.timestamp ? new Date(t.timestamp).getTime() : 0));
+          return ts >= windowDaysAgo.getTime() && ts <= planningDateTime.getTime();
+        });
         
         const totalOut = itemTrans.reduce((sum, t) => sum + t.quantity, 0);
         // Daily usage based on actual working days
@@ -2266,32 +2574,32 @@ function InventoryPlanning({ items, transactions, categories, holidays, globalSe
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+      <div className={`p-6 rounded-2xl border shadow-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 items-end">
           <div className="flex flex-col">
-            <label className="text-xs font-bold text-slate-500 uppercase mb-1">Ngày làm dự trù</label>
+            <label className={`text-xs font-bold uppercase mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Ngày làm dự trù</label>
             <input 
               type="date" 
               value={planningDate}
               onChange={(e) => setPlanningDate(e.target.value)}
-              className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+              className={`px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`}
             />
           </div>
           <div className="flex flex-col">
-            <label className="text-xs font-bold text-slate-500 uppercase mb-1">Dự trù đến ngày</label>
+            <label className={`text-xs font-bold uppercase mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Dự trù đến ngày</label>
             <input 
               type="date" 
               value={forecastUntilDate}
               onChange={(e) => setForecastUntilDate(e.target.value)}
-              className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+              className={`px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`}
             />
           </div>
           <div className="flex flex-col">
-            <label className="text-xs font-bold text-slate-500 uppercase mb-1">Dữ liệu tiêu hao</label>
+            <label className={`text-xs font-bold uppercase mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Dữ liệu tiêu hao</label>
             <select 
               value={usageWindow}
               onChange={(e) => setUsageWindow(parseInt(e.target.value))}
-              className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+              className={`px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`}
             >
               <option value="30">30 ngày gần nhất</option>
               <option value="60">60 ngày gần nhất</option>
@@ -2300,21 +2608,21 @@ function InventoryPlanning({ items, transactions, categories, holidays, globalSe
             </select>
           </div>
           <div className="flex flex-col">
-            <label className="text-xs font-bold text-slate-500 uppercase mb-1">Tìm kiếm</label>
+            <label className={`text-xs font-bold uppercase mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Tìm kiếm</label>
             <input 
               type="text" 
               placeholder="Tên vật tư..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+              className={`px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-900'}`}
             />
           </div>
           <div className="flex flex-col">
-            <label className="text-xs font-bold text-slate-500 uppercase mb-1">Nhóm</label>
+            <label className={`text-xs font-bold uppercase mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Nhóm</label>
             <select 
               value={filterCategory}
               onChange={(e) => setFilterCategory(e.target.value)}
-              className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+              className={`px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`}
             >
               <option value="">Tất cả nhóm</option>
               {uniqueCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -2331,28 +2639,28 @@ function InventoryPlanning({ items, transactions, categories, holidays, globalSe
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className={`rounded-2xl border shadow-sm overflow-hidden ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="bg-slate-50 border-b border-slate-200">
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Vật tư</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Tồn PM</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center w-32">Tồn thực tế</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Tiêu hao/Ngày</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Ngày hết dự kiến</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Cần nhập thêm</th>
+            <tr className={`border-b ${darkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+              <th className={`px-6 py-4 text-xs font-bold uppercase tracking-wider ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Vật tư</th>
+              <th className={`px-6 py-4 text-xs font-bold uppercase tracking-wider text-center ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Tồn PM</th>
+              <th className={`px-6 py-4 text-xs font-bold uppercase tracking-wider text-center w-32 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Tồn thực tế</th>
+              <th className={`px-6 py-4 text-xs font-bold uppercase tracking-wider text-center ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Tiêu hao/Ngày</th>
+              <th className={`px-6 py-4 text-xs font-bold uppercase tracking-wider text-center ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Ngày hết dự kiến</th>
+              <th className={`px-6 py-4 text-xs font-bold uppercase tracking-wider text-center ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Cần nhập thêm</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
             {filteredItems.map(item => {
               const result = results[item.id];
               return (
-                <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                <tr key={item.id} className={`transition-colors ${darkMode ? 'hover:bg-slate-700/50' : 'hover:bg-slate-50'}`}>
                   <td className="px-6 py-4">
-                    <div className="font-medium text-slate-900">{item.name}</div>
-                    <div className="text-xs text-slate-500">{item.unit}</div>
+                    <div className={`font-medium ${darkMode ? 'text-white' : 'text-slate-900'}`}>{item.name}</div>
+                    <div className={`text-xs ${darkMode ? 'text-slate-500' : 'text-slate-500'}`}>{item.unit}</div>
                   </td>
-                  <td className="px-6 py-4 text-center font-semibold text-slate-600">{item.currentStock}</td>
+                  <td className={`px-6 py-4 text-center font-semibold ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>{item.currentStock}</td>
                   <td className="px-6 py-4 text-center">
                     <input 
                       type="number" 
@@ -2362,17 +2670,17 @@ function InventoryPlanning({ items, transactions, categories, holidays, globalSe
                       onChange={(e) => {
                         setActualStockData(prev => ({ ...prev, [item.id]: e.target.value }));
                       }}
-                      className="w-20 px-2 py-1 text-center border border-slate-200 rounded focus:ring-2 focus:ring-blue-500 font-bold"
+                      className={`w-20 px-2 py-1 text-center border rounded focus:ring-2 focus:ring-blue-500 font-bold ${darkMode ? 'bg-slate-700 border-slate-600 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-900'}`}
                     />
                   </td>
-                  <td className="px-6 py-4 text-center text-slate-600">
+                  <td className={`px-6 py-4 text-center ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>
                     {result ? result.dailyUsage.toFixed(2) : '-'}
                   </td>
                   <td className="px-6 py-4 text-center">
                     {result ? (
                       <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                        result.depletionDate === 'N/A' ? 'bg-slate-100 text-slate-500' :
-                        'bg-blue-50 text-blue-600'
+                        result.depletionDate === 'N/A' ? (darkMode ? 'bg-slate-700 text-slate-400' : 'bg-slate-100 text-slate-500') :
+                        (darkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-blue-600')
                       }`}>
                         {result.depletionDate}
                       </span>
@@ -2395,7 +2703,7 @@ function InventoryPlanning({ items, transactions, categories, holidays, globalSe
   );
 }
 
-function Reports({ transactions, items, categories, holidays, globalSearch }: { transactions: Transaction[], items: Item[], categories: Category[], holidays: Holiday[], globalSearch: string }) {
+function Reports({ transactions, items, categories, holidays, globalSearch, darkMode }: { transactions: Transaction[], items: Item[], categories: Category[], holidays: Holiday[], globalSearch: string, darkMode?: boolean }) {
   const [reportType, setReportType] = useState<'custom' | 'week' | 'month' | 'quarter' | 'year'>('month');
   
   const getLocalYYYYMMDD = (date: Date) => {
@@ -2451,8 +2759,8 @@ function Reports({ transactions, items, categories, holidays, globalSearch }: { 
   };
 
   // Use local time for comparison
-  const startDateTime = new Date(startDate + 'T00:00:00').getTime();
-  const endDateTime = new Date(endDate + 'T23:59:59').getTime();
+  const startDateTime = useMemo(() => new Date(startDate + 'T00:00:00').getTime(), [startDate]);
+  const endDateTime = useMemo(() => new Date(endDate + 'T23:59:59').getTime(), [endDate]);
 
   // Calculate actual working days in range
   const workingDaysInRange = useMemo(() => {
@@ -2481,10 +2789,36 @@ function Reports({ transactions, items, categories, holidays, globalSearch }: { 
       const itemTrans = transactionsByItem[item.id] || [];
       
       const createdAtTs = item.createdAt?.toDate ? item.createdAt.toDate().getTime() : 
-                          (item.createdAt ? new Date(item.createdAt).getTime() : 0);
+                          (item.createdAt?.seconds ? item.createdAt.seconds * 1000 :
+                          (item.createdAt ? new Date(item.createdAt).getTime() : 0));
       
-      // If item was created after the end of the range, it shouldn't have balances in this period
-      if (createdAtTs > endDateTime) {
+      const getTs = (t: any) => {
+        if (!t.timestamp) return 0;
+        if (t.timestamp.toDate) return t.timestamp.toDate().getTime();
+        if (t.timestamp.seconds) return t.timestamp.seconds * 1000;
+        
+        const dateStr = String(t.timestamp);
+        // Handle DD/MM/YYYY HH:mm:ss or DD/MM/YYYY
+        const ddmmyyyy = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(.*)$/);
+        if (ddmmyyyy) {
+          const [_, d, m, y, rest] = ddmmyyyy;
+          return new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}${rest || ''}`).getTime();
+        }
+        
+        const ts = new Date(t.timestamp).getTime();
+        return isNaN(ts) ? 0 : ts;
+      };
+
+      const earliestTransTs = itemTrans.length > 0 
+        ? Math.min(...itemTrans.map(t => getTs(t)))
+        : Infinity;
+      
+      const effectiveCreatedAtTs = createdAtTs > 0 
+        ? Math.min(createdAtTs, earliestTransTs) 
+        : (earliestTransTs === Infinity ? 0 : earliestTransTs);
+
+      // If item didn't exist yet (no transactions and created later), hide it
+      if (effectiveCreatedAtTs > endDateTime && earliestTransTs > endDateTime) {
         return {
           ...item,
           openingBalance: 0,
@@ -2495,36 +2829,30 @@ function Reports({ transactions, items, categories, holidays, globalSearch }: { 
         };
       }
 
-      // Filter transactions related to this item that happened AFTER startDateTime
-      const transAfterStart = itemTrans.filter(t => {
-        if (!t.timestamp) return false;
-        const ts = t.timestamp.toDate ? t.timestamp.toDate().getTime() : new Date(t.timestamp).getTime();
-        return ts >= startDateTime;
-      });
-
       // Transactions within the selected range
-      const transInRange = transAfterStart.filter(t => {
-        const ts = t.timestamp.toDate ? t.timestamp.toDate().getTime() : new Date(t.timestamp).getTime();
-        return ts < endDateTime;
+      const transInRange = itemTrans.filter(t => {
+        const ts = getTs(t);
+        return ts >= startDateTime && ts <= endDateTime;
       });
 
-      const inQty = transInRange.filter(t => t.type === 'IN').reduce((sum, t) => sum + t.quantity, 0);
-      const outQty = transInRange.filter(t => t.type === 'OUT').reduce((sum, t) => sum + t.quantity, 0);
+      const inQty = transInRange.filter(t => t.type === 'IN').reduce((sum, t) => sum + Number(t.quantity || 0), 0);
+      const outQty = transInRange.filter(t => t.type === 'OUT' || t.type === 'TRANSFER').reduce((sum, t) => sum + Number(t.quantity || 0), 0);
 
-      // Transactions after the start date (to calculate opening balance)
-      const inAfterStart = transAfterStart.filter(t => t.type === 'IN').reduce((sum, t) => sum + t.quantity, 0);
-      const outAfterStart = transAfterStart.filter(t => t.type === 'OUT').reduce((sum, t) => sum + t.quantity, 0);
+      // Transactions from startDateTime until NOW (to calculate opening balance)
+      const transFromStart = itemTrans.filter(t => getTs(t) >= startDateTime);
+      const inFromStart = transFromStart.filter(t => t.type === 'IN').reduce((sum, t) => sum + Number(t.quantity || 0), 0);
+      const outFromStart = transFromStart.filter(t => t.type === 'OUT' || t.type === 'TRANSFER').reduce((sum, t) => sum + Number(t.quantity || 0), 0);
       
       // Opening Balance = Current Stock - (All IN since Start) + (All OUT since Start)
-      let openingBalance = item.currentStock - inAfterStart + outAfterStart;
+      let openingBalance = Number(item.currentStock || 0) - inFromStart + outFromStart;
       
-      // If item was created AFTER startDateTime, its opening balance was 0
-      if (createdAtTs > startDateTime) {
+      // If item didn't exist before startDateTime, its opening balance was 0
+      if (effectiveCreatedAtTs > startDateTime) {
         openingBalance = 0;
       }
 
       const closingBalance = openingBalance + inQty - outQty;
-      const avgDailyUsage = outQty / workingDaysInRange;
+      const avgDailyUsage = outQty / (workingDaysInRange || 1);
 
       return {
         ...item,
@@ -2535,26 +2863,18 @@ function Reports({ transactions, items, categories, holidays, globalSearch }: { 
         avgDailyUsage
       };
     });
-  }, [items, transactionsByItem, startDateTime, endDateTime, workingDaysInRange, globalSearch]);
+  }, [items, transactionsByItem, startDateTime, endDateTime, workingDaysInRange, globalSearch, startDate, endDate]);
 
-  const filteredTransactions = useMemo(() => {
-    return transactions.filter(t => {
-      if (!t.timestamp) return false;
-      const ts = t.timestamp.toDate ? t.timestamp.toDate().getTime() : new Date(t.timestamp).getTime();
-      return ts >= startDateTime && ts < endDateTime;
-    });
-  }, [transactions, startDateTime, endDateTime]);
-
-  const totalIn = filteredTransactions.filter(t => t.type === 'IN').reduce((sum, t) => sum + t.quantity, 0);
-  const totalOut = filteredTransactions.filter(t => t.type === 'OUT').reduce((sum, t) => sum + t.quantity, 0);
+  const totalIn = useMemo(() => detailedReport.reduce((sum, item) => sum + item.inQty, 0), [detailedReport]);
+  const totalOut = useMemo(() => detailedReport.reduce((sum, item) => sum + item.outQty, 0), [detailedReport]);
   
   const categoryValueData = useMemo(() => {
     return categories.map(cat => {
-      const catItems = items.filter(i => i.categoryId === cat.id);
+      const catItems = detailedReport.filter(i => i.categoryId === cat.id);
       const value = catItems.reduce((sum, i) => sum + (i.currentStock * (i.price || 0)), 0);
       return { name: cat.name, value };
     }).filter(d => d.value > 0).sort((a, b) => b.value - a.value);
-  }, [categories, items]);
+  }, [categories, detailedReport]);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [showOnlyWithChanges, setShowOnlyWithChanges] = useState(false);
@@ -2567,42 +2887,128 @@ function Reports({ transactions, items, categories, holidays, globalSearch }: { 
     });
   }, [detailedReport, searchTerm, showOnlyWithChanges]);
 
+  const handleExportExcel = () => {
+    const data = filteredDetailedReport.map(item => ({
+      'Tên vật tư': item.name,
+      'Nhóm': categories.find(c => c.id === item.categoryId)?.name || '-',
+      'Đơn vị': item.unit,
+      'Tồn đầu': item.openingBalance,
+      'Nhập trong kỳ': item.inQty,
+      'Xuất trong kỳ': item.outQty,
+      'Tồn cuối': item.closingBalance,
+      'Tiêu thụ bình quân/ngày': item.avgDailyUsage.toFixed(2)
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Báo cáo tồn kho");
+    XLSX.writeFile(wb, `Bao_cao_ton_kho_${startDate}_den_${endDate}.xlsx`);
+    toast.success('Đã xuất file Excel thành công!');
+  };
+
+  const handleExportPDF = () => {
+    const element = document.createElement('div');
+    // Use explicit inline styles with hex colors to avoid oklch parsing issues in html2canvas/html2pdf
+    element.style.backgroundColor = '#ffffff';
+    element.style.color = '#0f172a';
+    element.style.fontFamily = 'Inter, ui-sans-serif, system-ui, sans-serif';
+    element.style.width = '100%'; 
+    
+    const title = `
+      <div style="text-align: center; margin-bottom: 20px; padding-top: 10px;">
+        <h1 style="font-size: 24px; font-weight: bold; margin-bottom: 8px; color: #1e293b;">BÁO CÁO TỒN KHO VẬT TƯ</h1>
+        <p style="font-size: 12px; color: #64748b;">Từ ngày: ${formatDate(startDate)} đến ngày: ${formatDate(endDate)}</p>
+      </div>
+    `;
+
+    const tableHeader = `
+      <table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 9px;">
+        <thead>
+          <tr style="background-color: #3b82f6; color: white;">
+            <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: left;">Vật tư</th>
+            <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: left;">Nhóm</th>
+            <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: center;">Đơn vị</th>
+            <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: right;">Tồn đầu</th>
+            <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: right;">Nhập</th>
+            <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: right;">Xuất</th>
+            <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: right;">Tồn cuối</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filteredDetailedReport.map(item => `
+            <tr style="page-break-inside: avoid;">
+              <td style="padding: 6px; border: 1px solid #e2e8f0;">${item.name}</td>
+              <td style="padding: 6px; border: 1px solid #e2e8f0;">${categories.find(c => c.id === item.categoryId)?.name || '-'}</td>
+              <td style="padding: 6px; border: 1px solid #e2e8f0; text-align: center;">${item.unit}</td>
+              <td style="padding: 6px; border: 1px solid #e2e8f0; text-align: right;">${item.openingBalance}</td>
+              <td style="padding: 6px; border: 1px solid #e2e8f0; text-align: right; color: #2563eb;">+${item.inQty}</td>
+              <td style="padding: 6px; border: 1px solid #e2e8f0; text-align: right; color: #059669;">-${item.outQty}</td>
+              <td style="padding: 6px; border: 1px solid #e2e8f0; text-align: right; font-weight: bold;">${item.closingBalance}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+
+    const footer = `
+      <div style="margin-top: 30px; text-align: right; font-size: 9px; color: #64748b; page-break-inside: avoid;">
+        <p>Ngày xuất báo cáo: ${new Date().toLocaleDateString('vi-VN')} ${new Date().toLocaleTimeString('vi-VN')}</p>
+        <p>Người lập biểu: ${auth.currentUser?.displayName || auth.currentUser?.email || 'Hệ thống'}</p>
+      </div>
+    `;
+
+    element.innerHTML = title + tableHeader + footer;
+
+    const opt = {
+      margin: [15, 15, 20, 15] as [number, number, number, number], // [top, left, bottom, right] in mm
+      filename: `Bao_cao_ton_kho_${startDate}_den_${endDate}.pdf`,
+      image: { type: 'jpeg' as const, quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
+      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+    };
+
+    html2pdf().from(element).set(opt).save().then(() => {
+      toast.success('Đã xuất file PDF thành công!');
+    });
+  };
+
   return (
     <div className="space-y-8 pb-8">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Báo cáo & Thống kê</h2>
-          <p className="text-slate-500">Phân tích chi tiết lưu lượng và giá trị kho hàng.</p>
+          <h2 className={`text-2xl font-bold tracking-tight ${darkMode ? 'text-white' : 'text-slate-900'}`}>Báo cáo & Thống kê</h2>
+          <p className={`${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Phân tích chi tiết lưu lượng và giá trị kho hàng.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+          <div className={`flex p-1 rounded-xl border ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'}`}>
             <button 
               onClick={() => setPeriod('week')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${reportType === 'week' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${reportType === 'week' ? (darkMode ? 'bg-slate-700 text-blue-400 shadow-sm' : 'bg-white text-blue-600 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-500 hover:text-slate-700')}`}
             >
               Tuần
             </button>
             <button 
               onClick={() => setPeriod('month')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${reportType === 'month' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${reportType === 'month' ? (darkMode ? 'bg-slate-700 text-blue-400 shadow-sm' : 'bg-white text-blue-600 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-500 hover:text-slate-700')}`}
             >
               Tháng
             </button>
             <button 
               onClick={() => setPeriod('quarter')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${reportType === 'quarter' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${reportType === 'quarter' ? (darkMode ? 'bg-slate-700 text-blue-400 shadow-sm' : 'bg-white text-blue-600 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-500 hover:text-slate-700')}`}
             >
               Quý
             </button>
             <button 
               onClick={() => setPeriod('year')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${reportType === 'year' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${reportType === 'year' ? (darkMode ? 'bg-slate-700 text-blue-400 shadow-sm' : 'bg-white text-blue-600 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-500 hover:text-slate-700')}`}
             >
               Năm
             </button>
             <button 
               onClick={() => setReportType('custom')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${reportType === 'custom' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${reportType === 'custom' ? (darkMode ? 'bg-slate-700 text-blue-400 shadow-sm' : 'bg-white text-blue-600 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-500 hover:text-slate-700')}`}
             >
               Tùy chọn
             </button>
@@ -2613,7 +3019,7 @@ function Reports({ transactions, items, categories, holidays, globalSearch }: { 
               <select 
                 value={reportYear}
                 onChange={(e) => setReportYear(parseInt(e.target.value))}
-                className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 focus:ring-2 focus:ring-blue-500 outline-none"
+                className={`px-3 py-1.5 border rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-500 outline-none ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-600'}`}
               >
                 {[2023, 2024, 2025, 2026, 2027].map(y => (
                   <option key={y} value={y}>Năm {y}</option>
@@ -2624,7 +3030,7 @@ function Reports({ transactions, items, categories, holidays, globalSearch }: { 
                 <select 
                   value={reportWeek}
                   onChange={(e) => setReportWeek(parseInt(e.target.value))}
-                  className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 focus:ring-2 focus:ring-blue-500 outline-none"
+                  className={`px-3 py-1.5 border rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-500 outline-none ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-600'}`}
                 >
                   {Array.from({ length: 53 }, (_, i) => i + 1).map(w => (
                     <option key={w} value={w}>Tuần {w}</option>
@@ -2636,7 +3042,7 @@ function Reports({ transactions, items, categories, holidays, globalSearch }: { 
                 <select 
                   value={reportMonth}
                   onChange={(e) => setReportMonth(parseInt(e.target.value))}
-                  className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 focus:ring-2 focus:ring-blue-500 outline-none"
+                  className={`px-3 py-1.5 border rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-500 outline-none ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-600'}`}
                 >
                   {Array.from({ length: 12 }, (_, i) => i).map(m => (
                     <option key={m} value={m}>Tháng {m + 1}</option>
@@ -2648,7 +3054,7 @@ function Reports({ transactions, items, categories, holidays, globalSearch }: { 
                 <select 
                   value={reportQuarter}
                   onChange={(e) => setReportQuarter(parseInt(e.target.value))}
-                  className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 focus:ring-2 focus:ring-blue-500 outline-none"
+                  className={`px-3 py-1.5 border rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-500 outline-none ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-600'}`}
                 >
                   {[0, 1, 2, 3].map(q => (
                     <option key={q} value={q}>Quý {q + 1}</option>
@@ -2664,23 +3070,31 @@ function Reports({ transactions, items, categories, holidays, globalSearch }: { 
                 type="date" 
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+                className={`px-3 py-1.5 border rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500 outline-none ${darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'}`}
               />
               <span className="text-slate-400">→</span>
               <input 
                 type="date" 
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+                className={`px-3 py-1.5 border rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500 outline-none ${darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'}`}
               />
             </div>
           )}
 
           <div className="flex gap-2">
-            <button className="p-2 bg-white border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 transition-all">
+            <button 
+              onClick={handleExportExcel}
+              title="Xuất file Excel"
+              className={`p-2 border rounded-xl transition-all ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+            >
               <Download className="w-4 h-4" />
             </button>
-            <button className="p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-100">
+            <button 
+              onClick={handleExportPDF}
+              title="Xuất file PDF"
+              className="p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-100"
+            >
               <FileText className="w-4 h-4" />
             </button>
           </div>
@@ -2688,37 +3102,37 @@ function Reports({ transactions, items, categories, holidays, globalSearch }: { 
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Tổng nhập kho (kỳ)</p>
+        <div className={`p-6 rounded-2xl border shadow-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+          <p className={`text-xs font-bold uppercase tracking-wider mb-1 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>Tổng nhập kho (kỳ)</p>
           <p className="text-2xl font-black text-blue-600">{totalIn.toLocaleString('vi-VN')}</p>
-          <div className="mt-4 h-1 w-full bg-blue-50 rounded-full overflow-hidden">
+          <div className={`mt-4 h-1 w-full rounded-full overflow-hidden ${darkMode ? 'bg-blue-900/20' : 'bg-blue-50'}`}>
             <div className="h-full bg-blue-500" style={{ width: `${Math.min(100, (totalIn / (totalIn + totalOut || 1)) * 100)}%` }}></div>
           </div>
         </div>
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Tổng xuất kho (kỳ)</p>
+        <div className={`p-6 rounded-2xl border shadow-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+          <p className={`text-xs font-bold uppercase tracking-wider mb-1 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>Tổng xuất kho (kỳ)</p>
           <p className="text-2xl font-black text-emerald-600">{totalOut.toLocaleString('vi-VN')}</p>
-          <div className="mt-4 h-1 w-full bg-emerald-50 rounded-full overflow-hidden">
+          <div className={`mt-4 h-1 w-full rounded-full overflow-hidden ${darkMode ? 'bg-emerald-900/20' : 'bg-emerald-50'}`}>
             <div className="h-full bg-emerald-500" style={{ width: `${Math.min(100, (totalOut / (totalIn + totalOut || 1)) * 100)}%` }}></div>
           </div>
         </div>
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Giá trị tồn kho hiện tại</p>
-          <p className="text-2xl font-black text-purple-600">
+        <div className={`p-6 rounded-2xl border shadow-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+          <p className={`text-xs font-bold uppercase tracking-wider mb-1 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>Giá trị tồn kho hiện tại</p>
+          <p className={`text-2xl font-black ${darkMode ? 'text-purple-400' : 'text-purple-600'}`}>
             {items.reduce((sum, i) => sum + (i.currentStock * (i.price || 0)), 0).toLocaleString('vi-VN')} đ
           </p>
-          <div className="mt-4 h-1 w-full bg-purple-50 rounded-full overflow-hidden">
+          <div className={`mt-4 h-1 w-full rounded-full overflow-hidden ${darkMode ? 'bg-purple-900/20' : 'bg-purple-50'}`}>
             <div className="h-full bg-purple-500 w-3/4"></div>
           </div>
         </div>
       </div>
 
       {/* Detailed Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className={`rounded-2xl border shadow-sm overflow-hidden ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+        <div className={`p-6 border-b flex flex-col md:flex-row justify-between items-start md:items-center gap-4 ${darkMode ? 'border-slate-700' : 'border-slate-100'}`}>
           <div>
-            <h3 className="font-bold text-slate-900">Chi tiết vật tư trong kỳ</h3>
-            <span className="text-xs text-slate-500">Từ {formatDate(startDate)} đến {formatDate(endDate)}</span>
+            <h3 className={`font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>Chi tiết vật tư trong kỳ</h3>
+            <span className={`text-xs ${darkMode ? 'text-slate-500' : 'text-slate-500'}`}>Từ {formatDate(startDate)} đến {formatDate(endDate)}</span>
           </div>
           <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
             <div className="relative flex-1 md:flex-none">
@@ -2728,7 +3142,7 @@ function Reports({ transactions, items, categories, holidays, globalSearch }: { 
                 placeholder="Tìm kiếm vật tư..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 outline-none w-full md:w-64"
+                className={`pl-9 pr-4 py-2 border rounded-xl text-xs focus:ring-2 focus:ring-blue-500 outline-none w-full md:w-64 ${darkMode ? 'bg-slate-700 border-slate-600 text-white placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-900'}`}
               />
             </div>
             <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -2736,36 +3150,36 @@ function Reports({ transactions, items, categories, holidays, globalSearch }: { 
                 type="checkbox"
                 checked={showOnlyWithChanges}
                 onChange={(e) => setShowOnlyWithChanges(e.target.checked)}
-                className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                className={`w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600' : ''}`}
               />
-              <span className="text-xs font-medium text-slate-600">Chỉ hiện có biến động</span>
+              <span className={`text-xs font-medium ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>Chỉ hiện có biến động</span>
             </label>
           </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-50/50">
-                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100">Vật tư</th>
-                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100 text-right">Tồn đầu</th>
-                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100 text-right">Nhập</th>
-                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100 text-right">Xuất</th>
-                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100 text-right">Tồn cuối</th>
-                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100 text-right">Sử dụng/ngày</th>
+              <tr className={`${darkMode ? 'bg-slate-800/50' : 'bg-slate-50/50'}`}>
+                <th className={`p-4 text-xs font-bold uppercase tracking-wider border-b ${darkMode ? 'text-slate-400 border-slate-700' : 'text-slate-500 border-slate-100'}`}>Vật tư</th>
+                <th className={`p-4 text-xs font-bold uppercase tracking-wider border-b text-right ${darkMode ? 'text-slate-400 border-slate-700' : 'text-slate-500 border-slate-100'}`}>Tồn đầu</th>
+                <th className={`p-4 text-xs font-bold uppercase tracking-wider border-b text-right ${darkMode ? 'text-slate-400 border-slate-700' : 'text-slate-500 border-slate-100'}`}>Nhập</th>
+                <th className={`p-4 text-xs font-bold uppercase tracking-wider border-b text-right ${darkMode ? 'text-slate-400 border-slate-700' : 'text-slate-500 border-slate-100'}`}>Xuất</th>
+                <th className={`p-4 text-xs font-bold uppercase tracking-wider border-b text-right ${darkMode ? 'text-slate-400 border-slate-700' : 'text-slate-500 border-slate-100'}`}>Tồn cuối</th>
+                <th className={`p-4 text-xs font-bold uppercase tracking-wider border-b text-right ${darkMode ? 'text-slate-400 border-slate-700' : 'text-slate-500 border-slate-100'}`}>Sử dụng/ngày</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
               {filteredDetailedReport.map((item) => (
-                <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
+                <tr key={item.id} className={`transition-colors ${darkMode ? 'hover:bg-slate-700/50' : 'hover:bg-slate-50/50'}`}>
                   <td className="p-4">
-                    <p className="text-sm font-bold text-slate-900">{item.name}</p>
-                    <p className="text-xs text-slate-500">{categories.find(c => c.id === item.categoryId)?.name}</p>
+                    <p className={`text-sm font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>{item.name}</p>
+                    <p className={`text-xs ${darkMode ? 'text-slate-500' : 'text-slate-500'}`}>{categories.find(c => c.id === item.categoryId)?.name}</p>
                   </td>
-                  <td className="p-4 text-right text-sm font-medium text-slate-600">{item.openingBalance} {item.unit}</td>
+                  <td className={`p-4 text-right text-sm font-medium ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>{item.openingBalance} {item.unit}</td>
                   <td className="p-4 text-right text-sm font-bold text-blue-600">+{item.inQty}</td>
                   <td className="p-4 text-right text-sm font-bold text-emerald-600">-{item.outQty}</td>
-                  <td className="p-4 text-right text-sm font-bold text-slate-900">{item.closingBalance} {item.unit}</td>
-                  <td className="p-4 text-right text-sm font-medium text-slate-500">{item.avgDailyUsage.toFixed(2)}</td>
+                  <td className={`p-4 text-right text-sm font-bold ${darkMode ? 'text-slate-200' : 'text-slate-900'}`}>{item.closingBalance} {item.unit}</td>
+                  <td className={`p-4 text-right text-sm font-medium ${darkMode ? 'text-slate-500' : 'text-slate-500'}`}>{item.avgDailyUsage.toFixed(2)}</td>
                 </tr>
               ))}
             </tbody>
@@ -2774,8 +3188,8 @@ function Reports({ transactions, items, categories, holidays, globalSearch }: { 
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm min-w-0">
-          <h3 className="text-lg font-bold text-slate-900 mb-8">Giá trị theo nhóm vật tư</h3>
+        <div className={`p-6 rounded-2xl border shadow-sm min-w-0 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+          <h3 className={`text-lg font-bold mb-8 ${darkMode ? 'text-white' : 'text-slate-900'}`}>Giá trị theo nhóm vật tư</h3>
           <div className="h-80 min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -2794,7 +3208,14 @@ function Reports({ transactions, items, categories, holidays, globalSearch }: { 
                 </Pie>
                 <Tooltip 
                   formatter={(value: number) => value.toLocaleString('vi-VN') + ' đ'}
-                  contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)'}}
+                  contentStyle={{
+                    borderRadius: '16px', 
+                    border: 'none', 
+                    boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)',
+                    backgroundColor: darkMode ? '#1e293b' : '#ffffff',
+                    color: darkMode ? '#ffffff' : '#000000'
+                  }}
+                  itemStyle={{ color: darkMode ? '#cbd5e1' : '#475569' }}
                 />
                 <Legend verticalAlign="bottom" height={36}/>
               </PieChart>
@@ -2802,17 +3223,24 @@ function Reports({ transactions, items, categories, holidays, globalSearch }: { 
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm min-w-0">
-          <h3 className="text-lg font-bold text-slate-900 mb-8">Biến động tồn kho</h3>
+        <div className={`p-6 rounded-2xl border shadow-sm min-w-0 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+          <h3 className={`text-lg font-bold mb-8 ${darkMode ? 'text-white' : 'text-slate-900'}`}>Biến động tồn kho</h3>
           <div className="h-80 min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={categoryValueData.slice(0, 5)}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 10}} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 10}} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={darkMode ? "#334155" : "#f1f5f9"} />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: darkMode ? '#94a3b8' : '#64748b', fontSize: 10}} />
+                <YAxis axisLine={false} tickLine={false} tick={{fill: darkMode ? '#94a3b8' : '#64748b', fontSize: 10}} />
                 <Tooltip 
                   formatter={(value: number) => value.toLocaleString('vi-VN') + ' đ'}
-                  contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)'}}
+                  contentStyle={{
+                    borderRadius: '16px', 
+                    border: 'none', 
+                    boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)',
+                    backgroundColor: darkMode ? '#1e293b' : '#ffffff',
+                    color: darkMode ? '#ffffff' : '#000000'
+                  }}
+                  itemStyle={{ color: darkMode ? '#cbd5e1' : '#475569' }}
                 />
                 <Bar dataKey="value" fill="#3b82f6" radius={[6, 6, 0, 0]} />
               </BarChart>
@@ -2824,7 +3252,7 @@ function Reports({ transactions, items, categories, holidays, globalSearch }: { 
   );
 }
 
-function Holidays({ holidays }: { holidays: Holiday[] }) {
+function Holidays({ holidays, darkMode }: { holidays: Holiday[], darkMode?: boolean }) {
   const [newHoliday, setNewHoliday] = useState({ 
     startDate: new Date().toISOString().split('T')[0], 
     endDate: new Date().toISOString().split('T')[0], 
@@ -2892,8 +3320,8 @@ function Holidays({ holidays }: { holidays: Holiday[] }) {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h3 className="text-2xl font-bold text-slate-900">Quản lý ngày nghỉ</h3>
-          <p className="text-slate-500">Thiết lập các ngày nghỉ lễ, ngày không làm việc để tính toán tiêu hao chính xác.</p>
+          <h3 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>Quản lý ngày nghỉ</h3>
+          <p className={`${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Thiết lập các ngày nghỉ lễ, ngày không làm việc để tính toán tiêu hao chính xác.</p>
         </div>
         <button 
           onClick={() => setIsAdding(true)}
@@ -2909,32 +3337,32 @@ function Holidays({ holidays }: { holidays: Holiday[] }) {
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+            className={`rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
           >
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-              <h3 className="text-xl font-bold text-slate-900">Thêm ngày nghỉ mới</h3>
-              <button onClick={() => setIsAdding(false)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+            <div className={`p-6 border-b flex justify-between items-center ${darkMode ? 'border-slate-700' : 'border-slate-100'}`}>
+              <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>Thêm ngày nghỉ mới</h3>
+              <button onClick={() => setIsAdding(false)} className={`p-2 rounded-lg transition-colors ${darkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-100'}`}>
                 <X className="w-5 h-5 text-slate-400" />
               </button>
             </div>
             <form onSubmit={handleAdd} className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Từ ngày</label>
+                  <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Từ ngày</label>
                   <input 
                     required 
                     type="date" 
-                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500" 
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-200 text-slate-900'}`} 
                     value={newHoliday.startDate} 
                     onChange={e => setNewHoliday({...newHoliday, startDate: e.target.value, endDate: e.target.value > newHoliday.endDate ? e.target.value : newHoliday.endDate})} 
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Đến ngày</label>
+                  <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Đến ngày</label>
                   <input 
                     required 
                     type="date" 
-                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500" 
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-200 text-slate-900'}`} 
                     value={newHoliday.endDate} 
                     min={newHoliday.startDate}
                     onChange={e => setNewHoliday({...newHoliday, endDate: e.target.value})} 
@@ -2942,11 +3370,11 @@ function Holidays({ holidays }: { holidays: Holiday[] }) {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Ghi chú</label>
+                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Ghi chú</label>
                 <input 
                   type="text" 
                   placeholder="Lễ Quốc khánh, Nghỉ Tết..."
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500" 
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-900'}`} 
                   value={newHoliday.note} 
                   onChange={e => setNewHoliday({...newHoliday, note: e.target.value})} 
                 />
@@ -2955,7 +3383,7 @@ function Holidays({ holidays }: { holidays: Holiday[] }) {
                 <button 
                   type="button"
                   onClick={() => setIsAdding(false)}
-                  className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors"
+                  className={`flex-1 py-3 font-bold rounded-xl transition-colors ${darkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
                 >
                   Hủy
                 </button>
@@ -2971,16 +3399,16 @@ function Holidays({ holidays }: { holidays: Holiday[] }) {
         </div>
       )}
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className={`rounded-2xl border shadow-sm overflow-hidden ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="bg-slate-50 border-b border-slate-200">
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Ngày</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Ghi chú</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Thao tác</th>
+            <tr className={`border-b ${darkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+              <th className={`px-6 py-4 text-xs font-bold uppercase tracking-wider ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Ngày</th>
+              <th className={`px-6 py-4 text-xs font-bold uppercase tracking-wider ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Ghi chú</th>
+              <th className={`px-6 py-4 text-xs font-bold uppercase tracking-wider text-right ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Thao tác</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
             {sortedHolidays.length === 0 ? (
               <tr>
                 <td colSpan={3} className="px-6 py-12 text-center text-slate-400">
@@ -2989,9 +3417,9 @@ function Holidays({ holidays }: { holidays: Holiday[] }) {
               </tr>
             ) : (
               sortedHolidays.map(holiday => (
-                <tr key={holiday.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4 font-medium text-slate-900">{formatDate(holiday.date)}</td>
-                  <td className="px-6 py-4 text-slate-600">{holiday.note || '-'}</td>
+                <tr key={holiday.id} className={`transition-colors ${darkMode ? 'hover:bg-slate-700/50' : 'hover:bg-slate-50'}`}>
+                  <td className={`px-6 py-4 font-medium ${darkMode ? 'text-white' : 'text-slate-900'}`}>{formatDate(holiday.date)}</td>
+                  <td className={`px-6 py-4 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>{holiday.note || '-'}</td>
                   <td className="px-6 py-4 text-right">
                     <button 
                       onClick={() => handleDelete(holiday.id)}
@@ -3010,7 +3438,7 @@ function Holidays({ holidays }: { holidays: Holiday[] }) {
   );
 }
 
-function AiAssistant({ analysis, isAnalyzing, onAnalyze }: { analysis: AiAnalysis | null, isAnalyzing: boolean, onAnalyze: () => void }) {
+function AiAssistant({ analysis, isAnalyzing, onAnalyze, darkMode }: { analysis: AiAnalysis | null, isAnalyzing: boolean, onAnalyze: () => void, darkMode?: boolean }) {
   return (
     <div className="space-y-6">
       <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-8 rounded-2xl text-white shadow-xl shadow-blue-100 relative overflow-hidden">
@@ -3036,28 +3464,28 @@ function AiAssistant({ analysis, isAnalyzing, onAnalyze }: { analysis: AiAnalysi
       {analysis && (
         <div className="space-y-6">
           {/* Summary Card */}
-          <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
+          <div className={`p-8 rounded-2xl border shadow-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
             <div className="flex items-center gap-3 text-blue-600 mb-4">
               <BrainCircuit className="w-6 h-6" />
               <h4 className="font-bold text-lg">Tóm tắt từ Gemini</h4>
             </div>
-            <p className="text-slate-700 text-lg leading-relaxed italic">
+            <p className={`text-lg leading-relaxed italic ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
               "{analysis.summary}"
             </p>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Alerts Section */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-              <h4 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
+            <div className={`p-6 rounded-2xl border shadow-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+              <h4 className={`font-bold mb-4 flex items-center gap-2 ${darkMode ? 'text-white' : 'text-slate-900'}`}>
                 <AlertTriangle className="w-5 h-5 text-red-500" /> Cảnh báo quan trọng
               </h4>
               <div className="space-y-3">
                 {analysis.alerts.map((alert, idx) => (
                   <div key={idx} className={`p-4 rounded-xl border flex gap-3 ${
-                    alert.type === 'danger' ? 'bg-red-50 border-red-100 text-red-700' :
-                    alert.type === 'warning' ? 'bg-amber-50 border-amber-100 text-amber-700' :
-                    'bg-blue-50 border-blue-100 text-blue-700'
+                    alert.type === 'danger' ? (darkMode ? 'bg-red-900/20 border-red-800/30 text-red-400' : 'bg-red-50 border-red-100 text-red-700') :
+                    alert.type === 'warning' ? (darkMode ? 'bg-amber-900/20 border-amber-800/30 text-amber-400' : 'bg-amber-50 border-amber-100 text-amber-700') :
+                    (darkMode ? 'bg-blue-900/20 border-blue-800/30 text-blue-400' : 'bg-blue-50 border-blue-100 text-blue-700')
                   }`}>
                     <div className="mt-0.5">
                       {alert.type === 'danger' ? <X className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
@@ -3075,23 +3503,23 @@ function AiAssistant({ analysis, isAnalyzing, onAnalyze }: { analysis: AiAnalysi
             </div>
 
             {/* Recommendations Section */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-              <h4 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
+            <div className={`p-6 rounded-2xl border shadow-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+              <h4 className={`font-bold mb-4 flex items-center gap-2 ${darkMode ? 'text-white' : 'text-slate-900'}`}>
                 <TrendingUp className="w-5 h-5 text-emerald-500" /> Đề xuất tối ưu
               </h4>
               <div className="space-y-3">
                 {analysis.recommendations.map((rec, idx) => (
-                  <div key={idx} className="p-4 rounded-xl bg-slate-50 border border-slate-100 flex gap-3">
+                  <div key={idx} className={`p-4 rounded-xl border flex gap-3 ${darkMode ? 'bg-slate-700/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                      rec.priority === 'high' ? 'bg-red-100 text-red-600' :
-                      rec.priority === 'medium' ? 'bg-amber-100 text-amber-600' :
-                      'bg-blue-100 text-blue-600'
+                      rec.priority === 'high' ? (darkMode ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-600') :
+                      rec.priority === 'medium' ? (darkMode ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-100 text-amber-600') :
+                      (darkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-600')
                     }`}>
                       <span className="text-[10px] font-black uppercase">{rec.priority}</span>
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-slate-900">{rec.action}</p>
-                      <p className="text-xs text-slate-500">{rec.reason}</p>
+                      <p className={`text-sm font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>{rec.action}</p>
+                      <p className={`text-xs ${darkMode ? 'text-slate-500' : 'text-slate-500'}`}>{rec.reason}</p>
                     </div>
                   </div>
                 ))}
@@ -3101,14 +3529,14 @@ function AiAssistant({ analysis, isAnalyzing, onAnalyze }: { analysis: AiAnalysi
 
           {/* Anomalies Section */}
           {analysis.anomalies.length > 0 && (
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-              <h4 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
+            <div className={`p-6 rounded-2xl border shadow-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+              <h4 className={`font-bold mb-4 flex items-center gap-2 ${darkMode ? 'text-white' : 'text-slate-900'}`}>
                 <Search className="w-5 h-5 text-purple-500" /> Phát hiện bất thường
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {analysis.anomalies.map((anomaly, idx) => (
-                  <div key={idx} className="p-4 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-between">
-                    <p className="text-sm text-purple-900">{anomaly.description}</p>
+                  <div key={idx} className={`p-4 rounded-xl border flex items-center justify-between ${darkMode ? 'bg-purple-900/20 border-purple-800/30' : 'bg-purple-50 border-purple-100'}`}>
+                    <p className={`text-sm ${darkMode ? 'text-purple-300' : 'text-purple-900'}`}>{anomaly.description}</p>
                     <span className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase ${
                       anomaly.severity === 'high' ? 'bg-red-500 text-white' :
                       anomaly.severity === 'medium' ? 'bg-amber-500 text-white' :
@@ -3123,8 +3551,8 @@ function AiAssistant({ analysis, isAnalyzing, onAnalyze }: { analysis: AiAnalysi
           )}
 
           {/* Detailed Analysis Section */}
-          <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm prose prose-slate max-w-none">
-            <div className="flex items-center gap-2 text-slate-900 mb-6 pb-4 border-b border-slate-100">
+          <div className={`p-8 rounded-2xl border shadow-sm prose max-w-none ${darkMode ? 'bg-slate-800 border-slate-700 prose-invert' : 'bg-white border-slate-200 prose-slate'}`}>
+            <div className={`flex items-center gap-2 mb-6 pb-4 border-b ${darkMode ? 'text-white border-slate-700' : 'text-slate-900 border-slate-100'}`}>
               <FileText className="w-6 h-6" />
               <span className="font-bold text-lg">Phân tích chi tiết</span>
             </div>
@@ -3138,14 +3566,17 @@ function AiAssistant({ analysis, isAnalyzing, onAnalyze }: { analysis: AiAnalysi
           <AiFeatureCard 
             title="Dự báo tồn kho" 
             desc="Cảnh báo các vật tư sắp hết dựa trên tốc độ tiêu thụ thực tế." 
+            darkMode={darkMode}
           />
           <AiFeatureCard 
             title="Phát hiện bất thường" 
             desc="Tìm ra các sai lệch trong việc sử dụng vật tư văn phòng phẩm và thuốc." 
+            darkMode={darkMode}
           />
           <AiFeatureCard 
             title="Tối ưu hóa nhập hàng" 
             desc="Đề xuất số lượng nhập hàng tối ưu để tránh lãng phí hoặc thiếu hụt." 
+            darkMode={darkMode}
           />
         </div>
       )}
@@ -3153,14 +3584,14 @@ function AiAssistant({ analysis, isAnalyzing, onAnalyze }: { analysis: AiAnalysi
   );
 }
 
-function AiFeatureCard({ title, desc }: { title: string, desc: string }) {
+function AiFeatureCard({ title, desc, darkMode }: { title: string, desc: string, darkMode?: boolean }) {
   return (
-    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-      <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center mb-4">
+    <div className={`p-6 rounded-2xl border shadow-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+      <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-4 ${darkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
         <ChevronRight className="w-6 h-6" />
       </div>
-      <h4 className="font-bold text-slate-900 mb-2">{title}</h4>
-      <p className="text-sm text-slate-500 leading-relaxed">{desc}</p>
+      <h4 className={`font-bold mb-2 ${darkMode ? 'text-white' : 'text-slate-900'}`}>{title}</h4>
+      <p className={`text-sm leading-relaxed ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{desc}</p>
     </div>
   );
 }
