@@ -43,7 +43,7 @@ service cloud.firestore {
 
     match /transactions/{id} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
+      allow write: if isAuthenticated();
     }
 
     match /holidays/{id} {

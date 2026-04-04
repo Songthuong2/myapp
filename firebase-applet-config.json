@@ -1,10 +1,8 @@
 {
-  "projectId": "n8n-projects-490416",
-  "appId": "1:408827575048:web:7a0aedf321d01b4c204abd",
-  "apiKey": "AIzaSyB-xhVtVhBekrvTOBP9V3A7HrbhwpEXTco",
-  "authDomain": "n8n-projects-490416.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-5294cdbf-99ba-4356-8963-c47ffa22fe8a",
-  "storageBucket": "n8n-projects-490416.firebasestorage.app",
-  "messagingSenderId": "408827575048",
-  "measurementId": ""
+  "apiKey": "AIzaSyDE2LIPsuxhVOTrF62iQcaYde-6dZcWw_U",
+  "authDomain": "myapp-74eb0.firebaseapp.com",
+  "projectId": "myapp-74eb0",
+  "storageBucket": "myapp-74eb0.firebasestorage.app",
+  "messagingSenderId": "578095507405",
+  "appId": "1:578095507405:web:cbccf79b63c55ee8d00684"
 }
