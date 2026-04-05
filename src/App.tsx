@@ -2309,6 +2309,12 @@ function Transactions({ transactions, items, departments, categories, globalSear
     }
   };
 
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return '';
+    const [y, m, d] = dateStr.split('-');
+    return `${d}/${m}/${y}`;
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -2360,6 +2366,20 @@ function Transactions({ transactions, items, departments, categories, globalSear
         >
           <Plus className="w-4 h-4" /> Tạo giao dịch
         </button>
+      </div>
+
+      <div className={`p-4 rounded-xl border flex items-center gap-3 ${darkMode ? 'bg-blue-900/20 border-blue-800/30 text-blue-300' : 'bg-blue-50 border-blue-100 text-blue-700'}`}>
+        <ArrowLeftRight className="w-4 h-4" />
+        <span className="text-sm font-medium">
+          Tổng số giao dịch: <strong className="text-base">{filteredTransactions.length}</strong>
+          {startDate && endDate ? (
+            <span> (từ {formatDate(startDate)} đến {formatDate(endDate)})</span>
+          ) : startDate ? (
+            <span> (từ {formatDate(startDate)})</span>
+          ) : endDate ? (
+            <span> (đến {formatDate(endDate)})</span>
+          ) : null}
+        </span>
       </div>
 
       <div className={`rounded-2xl border shadow-sm overflow-hidden ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
