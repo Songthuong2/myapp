@@ -1455,7 +1455,7 @@ function RoomSelect({
         }}
       >
         <option value="">{placeholder}</option>
-        {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+        {departments.filter(d => d.name !== 'Tất cả' && d.name !== 'Tất cả phòng').map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
         <option value="ADD_NEW">+ Thêm phòng mới...</option>
       </select>
     </div>
@@ -1801,7 +1801,7 @@ function Inventory({ items, categories, departments, globalSearch, darkMode }: {
               className={`px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'}`}
             >
               <option value="">Tất cả phòng</option>
-              {departments.map(d => (
+              {departments.filter(d => d.name !== 'Tất cả' && d.name !== 'Tất cả phòng').map(d => (
                 <option key={d.id} value={d.id}>{d.name}</option>
               ))}
             </select>
@@ -2346,7 +2346,7 @@ function Transactions({ transactions, items, departments, categories, globalSear
               className={`px-3 py-1.5 border rounded-lg text-xs focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-200 text-slate-900'}`}
             >
               <option value="">Tất cả</option>
-              {departments.map(d => (
+              {departments.filter(d => d.name !== 'Tất cả' && d.name !== 'Tất cả phòng').map(d => (
                 <option key={d.id} value={d.id}>{d.name}</option>
               ))}
             </select>
