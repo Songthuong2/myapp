@@ -399,6 +399,15 @@ export default function App() {
   return (
     <div className={`min-h-screen flex ${darkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
       <Toaster position="top-right" richColors />
+      
+      {/* Mobile Sidebar Overlay */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-40 lg:hidden transition-opacity duration-300"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
       <aside className={`
         fixed inset-y-0 left-0 z-50 w-64 border-r transform transition-transform duration-300 ease-in-out
@@ -406,15 +415,23 @@ export default function App() {
         lg:translate-x-0 lg:static lg:inset-0
         ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}
       `}>
-        <div className="h-full flex flex-col">
-          <div className={`p-6 flex items-center gap-3 border-b ${darkMode ? 'border-slate-700' : 'border-slate-100'}`}>
-            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-md">
-              <Package className="w-6 h-6 text-white" />
+        <div className="h-full flex flex-col overflow-hidden">
+          <div className={`p-6 flex items-center justify-between border-b shrink-0 ${darkMode ? 'border-slate-700' : 'border-slate-100'}`}>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-md">
+                <Package className="w-6 h-6 text-white" />
+              </div>
+              <span className={`font-bold text-xl ${darkMode ? 'text-white' : 'text-slate-900'}`}>CDHA Inventory</span>
             </div>
-            <span className={`font-bold text-xl ${darkMode ? 'text-white' : 'text-slate-900'}`}>CDHA Inventory</span>
+            <button 
+              onClick={() => setSidebarOpen(false)} 
+              className={`lg:hidden p-1 rounded-lg transition-colors ${darkMode ? 'text-slate-400 hover:bg-slate-700 hover:text-white' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-900'}`}
+            >
+              <X className="w-6 h-6" />
+            </button>
           </div>
 
-          <nav className="flex-1 px-4 py-6 space-y-2">
+          <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto custom-scrollbar">
             <NavItem 
               icon={<LayoutDashboard />} 
               label="Tổng quan" 
@@ -483,7 +500,7 @@ export default function App() {
             )}
           </nav>
 
-          <div className={`p-4 border-t ${darkMode ? 'border-slate-700' : 'border-slate-100'}`}>
+          <div className={`p-4 border-t shrink-0 ${darkMode ? 'border-slate-700' : 'border-slate-100'}`}>
             <div className={`flex items-center gap-3 p-3 rounded-xl ${darkMode ? 'bg-slate-700/50' : 'bg-slate-50'}`}>
               <img src={user.photoURL || ''} className="w-10 h-10 rounded-full border-2 border-white shadow-sm" alt="User" />
               <div className="flex-1 overflow-hidden">
@@ -2015,13 +2032,46 @@ function Transactions({ transactions, items, departments, categories, globalSear
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
 
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
   const filteredTransactions = useMemo(() => {
-    if (!globalSearch) return transactions;
-    return transactions.filter(t => {
-      const item = items.find(i => i.id === t.itemId);
-      return item?.name.toLowerCase().includes(globalSearch.toLowerCase());
-    });
-  }, [transactions, items, globalSearch]);
+    let filtered = transactions;
+    
+    if (globalSearch) {
+      filtered = filtered.filter(t => {
+        const item = items.find(i => i.id === t.itemId);
+        return item?.name.toLowerCase().includes(globalSearch.toLowerCase());
+      });
+    }
+
+    const getTs = (t: any) => {
+      if (!t.timestamp) return 0;
+      if (typeof t.timestamp.toDate === 'function') return t.timestamp.toDate().getTime();
+      if (t.timestamp.seconds !== undefined) return t.timestamp.seconds * 1000;
+      const ts = new Date(t.timestamp).getTime();
+      if (!isNaN(ts)) return ts;
+      const dateStr = String(t.timestamp);
+      const ddmmyyyy = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(.*)$/);
+      if (ddmmyyyy) {
+        const [_, d, m, y, rest] = ddmmyyyy;
+        return new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}${rest || ''}`).getTime();
+      }
+      return 0;
+    };
+
+    if (startDate) {
+      const start = new Date(startDate + 'T00:00:00').getTime();
+      filtered = filtered.filter(t => getTs(t) >= start);
+    }
+
+    if (endDate) {
+      const end = new Date(endDate + 'T23:59:59').getTime();
+      filtered = filtered.filter(t => getTs(t) <= end);
+    }
+
+    return filtered;
+  }, [transactions, items, globalSearch, startDate, endDate]);
 
   useEffect(() => {
     if (itemSearchTerm.trim().length > 0 && showAdd) {
@@ -2104,7 +2154,36 @@ function Transactions({ transactions, items, departments, categories, globalSear
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-end">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className={`p-4 rounded-xl border shadow-sm flex flex-wrap items-center gap-4 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+          <div className="flex items-center gap-2">
+            <Calendar className={`w-4 h-4 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`} />
+            <span className={`text-xs font-bold uppercase ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Từ ngày:</span>
+            <input 
+              type="date" 
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className={`px-3 py-1.5 border rounded-lg text-xs focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`text-xs font-bold uppercase ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Đến ngày:</span>
+            <input 
+              type="date" 
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className={`px-3 py-1.5 border rounded-lg text-xs focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`}
+            />
+          </div>
+          {(startDate || endDate) && (
+            <button 
+              onClick={() => { setStartDate(''); setEndDate(''); }}
+              className={`text-xs font-medium px-2 py-1 rounded hover:bg-slate-100 ${darkMode ? 'text-slate-400 hover:bg-slate-700' : 'text-slate-500'}`}
+            >
+              Xóa lọc
+            </button>
+          )}
+        </div>
         <button 
           onClick={() => setShowAdd(true)}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-lg shadow-blue-100"
@@ -3343,7 +3422,7 @@ function Reports({ transactions, items, categories, holidays, globalSearch, dark
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6">
         <div className={`p-6 rounded-2xl border shadow-sm min-w-0 flex flex-col h-[450px] ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
           <div className="mb-6">
             <h3 className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>Giá trị theo nhóm vật tư</h3>
