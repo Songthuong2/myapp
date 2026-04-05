@@ -90,6 +90,7 @@ interface Item {
   id: string; 
   name: string; 
   categoryId: string; 
+  departmentId?: string;
   unit: string; 
   minStock: number; 
   currentStock: number; 
@@ -357,6 +358,22 @@ export default function App() {
       unsubHolidays();
     };
   }, [user]);
+
+  // Initialize default departments
+  useEffect(() => {
+    if (!user || departments.length > 0) return;
+    const initDepts = async () => {
+      const defaults = ["Tất cả", "X quang", "CLVT"];
+      for (const name of defaults) {
+        const q = query(collection(db, "departments"), where("name", "==", name));
+        const snap = await getDocs(q);
+        if (snap.empty) {
+          await addDoc(collection(db, "departments"), { name });
+        }
+      }
+    };
+    initDepts();
+  }, [user, departments.length]);
 
   // --- AI Analysis ---
   const runAiAnalysis = async () => {
@@ -629,7 +646,7 @@ export default function App() {
               darkMode={darkMode}
             />
           )}
-          {activeTab === 'inventory' && <Inventory items={items} categories={categories} globalSearch={globalSearch} darkMode={darkMode} />}
+          {activeTab === 'inventory' && <Inventory items={items} categories={categories} departments={departments} globalSearch={globalSearch} darkMode={darkMode} />}
           {activeTab === 'transactions' && <Transactions transactions={transactions} items={items} departments={departments} categories={categories} globalSearch={globalSearch} darkMode={darkMode} />}
           {activeTab === 'audit' && <InventoryAudit items={items} categories={categories} globalSearch={globalSearch} darkMode={darkMode} />}
           {activeTab === 'planning' && <InventoryPlanning items={items} transactions={transactions} categories={categories} holidays={holidays} globalSearch={globalSearch} darkMode={darkMode} />}
@@ -719,6 +736,12 @@ function Dashboard({
   globalSearch: string,
   darkMode?: boolean
 }) {
+  const [isChartReady, setIsChartReady] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setIsChartReady(true), 1000);
+    return () => clearTimeout(timer);
+  }, []);
+
   const filteredItems = useMemo(() => {
     if (!globalSearch) return items;
     return items.filter(i => i.name.toLowerCase().includes(globalSearch.toLowerCase()));
@@ -1065,60 +1088,62 @@ function Dashboard({
                 </div>
               </div>
             </div>
-            <div className="h-80 min-w-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={transactionHistory}>
-                  <defs>
-                    <linearGradient id="colorIn" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/>
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                    </linearGradient>
-                    <linearGradient id="colorOut" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={darkMode ? "#334155" : "#f1f5f9"} />
-                  <XAxis 
-                    dataKey="date" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{fill: darkMode ? '#94a3b8' : '#64748b', fontSize: 12}} 
-                    dy={10}
-                  />
-                  <YAxis 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{fill: darkMode ? '#94a3b8' : '#64748b', fontSize: 12}} 
-                  />
-                  <Tooltip 
-                    contentStyle={{
-                      borderRadius: '16px', 
-                      border: 'none', 
-                      boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)',
-                      backgroundColor: darkMode ? '#1e293b' : '#ffffff',
-                      color: darkMode ? '#ffffff' : '#000000'
-                    }}
-                    itemStyle={{ color: darkMode ? '#cbd5e1' : '#475569' }}
-                  />
-                  <Area 
-                    type="monotone" 
-                    dataKey="nhập" 
-                    stroke="#3b82f6" 
-                    strokeWidth={4}
-                    fillOpacity={1} 
-                    fill="url(#colorIn)" 
-                  />
-                  <Area 
-                    type="monotone" 
-                    dataKey="xuất" 
-                    stroke="#10b981" 
-                    strokeWidth={4}
-                    fillOpacity={1} 
-                    fill="url(#colorOut)" 
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+            <div className="h-80 min-h-[320px] w-full">
+              {isChartReady && transactionHistory.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%" debounce={100}>
+                  <AreaChart data={transactionHistory} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorIn" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="colorOut" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={darkMode ? "#334155" : "#f1f5f9"} />
+                    <XAxis 
+                      dataKey="date" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{fill: darkMode ? '#94a3b8' : '#64748b', fontSize: 12}} 
+                      dy={10}
+                    />
+                    <YAxis 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{fill: darkMode ? '#94a3b8' : '#64748b', fontSize: 12}} 
+                    />
+                    <Tooltip 
+                      contentStyle={{
+                        borderRadius: '16px', 
+                        border: 'none', 
+                        boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)',
+                        backgroundColor: darkMode ? '#1e293b' : '#ffffff',
+                        color: darkMode ? '#ffffff' : '#000000'
+                      }}
+                      itemStyle={{ color: darkMode ? '#cbd5e1' : '#475569' }}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="nhập" 
+                      stroke="#3b82f6" 
+                      strokeWidth={4}
+                      fillOpacity={1} 
+                      fill="url(#colorIn)" 
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="xuất" 
+                      stroke="#10b981" 
+                      strokeWidth={4}
+                      fillOpacity={1} 
+                      fill="url(#colorOut)" 
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : null}
             </div>
           </div>
         </motion.div>
@@ -1127,35 +1152,37 @@ function Dashboard({
           <div className={`p-6 rounded-2xl border shadow-sm flex flex-col h-full min-w-0 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
             <h3 className={`text-lg font-bold mb-2 ${darkMode ? 'text-white' : 'text-slate-900'}`}>Tình trạng tồn kho</h3>
             <p className={`text-xs mb-6 ${darkMode ? 'text-slate-500' : 'text-slate-500'}`}>Phân loại vật tư theo mức độ an toàn</p>
-            <div className="flex-1 min-h-[250px] relative min-w-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={statusData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={70}
-                    outerRadius={90}
-                    paddingAngle={8}
-                    dataKey="value"
-                    stroke="none"
-                  >
-                    {statusData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    contentStyle={{
-                      borderRadius: '16px', 
-                      border: 'none', 
-                      boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)',
-                      backgroundColor: darkMode ? '#1e293b' : '#ffffff',
-                      color: darkMode ? '#ffffff' : '#000000'
-                    }}
-                    itemStyle={{ color: darkMode ? '#cbd5e1' : '#475569' }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+            <div className="flex-1 min-h-[250px] relative w-full">
+              {isChartReady && statusData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%" debounce={100}>
+                  <PieChart>
+                    <Pie
+                      data={statusData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={70}
+                      outerRadius={90}
+                      paddingAngle={8}
+                      dataKey="value"
+                      stroke="none"
+                    >
+                      {statusData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      contentStyle={{
+                        borderRadius: '16px', 
+                        border: 'none', 
+                        boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)',
+                        backgroundColor: darkMode ? '#1e293b' : '#ffffff',
+                        color: darkMode ? '#ffffff' : '#000000'
+                      }}
+                      itemStyle={{ color: darkMode ? '#cbd5e1' : '#475569' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : null}
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                 <span className={`text-3xl font-black ${darkMode ? 'text-white' : 'text-slate-900'}`}>{items.length}</span>
                 <span className={`text-[10px] font-bold uppercase tracking-widest ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>Vật tư</span>
@@ -1187,37 +1214,39 @@ function Dashboard({
               </div>
               <Filter className="w-4 h-4 text-slate-400" />
             </div>
-            <div className="h-96 min-w-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={categoryData.slice(0, 5)} layout="vertical" margin={{ left: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={darkMode ? "#334155" : "#f1f5f9"} />
-                  <XAxis type="number" hide />
-                  <YAxis 
-                    dataKey="name" 
-                    type="category" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{fill: darkMode ? '#94a3b8' : '#64748b', fontSize: 11}} 
-                    width={120}
-                  />
-                  <Tooltip 
-                    cursor={{fill: darkMode ? '#334155' : '#f8fafc'}}
-                    contentStyle={{
-                      borderRadius: '16px', 
-                      border: 'none', 
-                      boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)',
-                      backgroundColor: darkMode ? '#1e293b' : '#ffffff',
-                      color: darkMode ? '#ffffff' : '#000000'
-                    }}
-                    itemStyle={{ color: darkMode ? '#cbd5e1' : '#475569' }}
-                  />
-                  <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={24}>
-                    {categoryData.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ec4899'][index % 5]} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="h-96 min-h-[384px] w-full">
+              {isChartReady && categoryData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%" debounce={100}>
+                  <BarChart data={categoryData.slice(0, 5)} layout="vertical" margin={{ left: 20, right: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={darkMode ? "#334155" : "#f1f5f9"} />
+                    <XAxis type="number" hide />
+                    <YAxis 
+                      dataKey="name" 
+                      type="category" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{fill: darkMode ? '#94a3b8' : '#64748b', fontSize: 11}} 
+                      width={120}
+                    />
+                    <Tooltip 
+                      cursor={{fill: darkMode ? '#334155' : '#f8fafc'}}
+                      contentStyle={{
+                        borderRadius: '16px', 
+                        border: 'none', 
+                        boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)',
+                        backgroundColor: darkMode ? '#1e293b' : '#ffffff',
+                        color: darkMode ? '#ffffff' : '#000000'
+                      }}
+                      itemStyle={{ color: darkMode ? '#cbd5e1' : '#475569' }}
+                    />
+                    <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={24}>
+                      {categoryData.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ec4899'][index % 5]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : null}
             </div>
           </div>
         </motion.div>
@@ -1347,13 +1376,99 @@ function StatCard({ label, value, icon, color, trend, isUp, darkMode }: { label:
   );
 }
 
-function Inventory({ items, categories, globalSearch, darkMode }: { items: Item[], categories: Category[], globalSearch: string, darkMode?: boolean }) {
+function RoomSelect({ 
+  value, 
+  onChange, 
+  departments, 
+  darkMode, 
+  placeholder = "Chọn phòng..." 
+}: { 
+  value: string, 
+  onChange: (val: string) => void, 
+  departments: Department[], 
+  darkMode?: boolean,
+  placeholder?: string
+}) {
+  const [isAdding, setIsAdding] = useState(false);
+  const [newRoom, setNewRoom] = useState('');
+
+  const handleAdd = async () => {
+    if (!newRoom.trim()) {
+      setIsAdding(false);
+      return;
+    }
+    const existing = departments.find(d => d.name.toLowerCase() === newRoom.trim().toLowerCase());
+    if (existing) {
+      onChange(existing.id);
+    } else {
+      try {
+        const docRef = await addDoc(collection(db, "departments"), { name: newRoom.trim() });
+        onChange(docRef.id);
+      } catch (error) {
+        toast.error("Lỗi khi thêm phòng mới");
+      }
+    }
+    setNewRoom('');
+    setIsAdding(false);
+  };
+
+  if (isAdding) {
+    return (
+      <div className="flex gap-2">
+        <input 
+          autoFocus
+          type="text"
+          className={`flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-200 text-slate-900'}`}
+          placeholder="Tên phòng mới..."
+          value={newRoom}
+          onChange={e => setNewRoom(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              handleAdd();
+            }
+            if (e.key === 'Escape') setIsAdding(false);
+          }}
+        />
+        <button 
+          type="button"
+          onClick={handleAdd}
+          className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+        >
+          <Plus className="w-4 h-4" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex gap-2">
+      <select 
+        className={`flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-200 text-slate-900'}`}
+        value={value}
+        onChange={e => {
+          if (e.target.value === 'ADD_NEW') {
+            setIsAdding(true);
+          } else {
+            onChange(e.target.value);
+          }
+        }}
+      >
+        <option value="">{placeholder}</option>
+        {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+        <option value="ADD_NEW">+ Thêm phòng mới...</option>
+      </select>
+    </div>
+  );
+}
+
+function Inventory({ items, categories, departments, globalSearch, darkMode }: { items: Item[], categories: Category[], departments: Department[], globalSearch: string, darkMode?: boolean }) {
   const [showAdd, setShowAdd] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [newItem, setNewItem] = useState({ name: '', categoryId: '', unit: '', minStock: '0', currentStock: '0', expiryDate: '', price: '0' });
+  const [newItem, setNewItem] = useState({ name: '', categoryId: '', departmentId: '', unit: '', minStock: '0', currentStock: '0', expiryDate: '', price: '0' });
   const [editingItem, setEditingItem] = useState<Item | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', categoryId: '', unit: '', minStock: '0', expiryDate: '', price: '0' });
+  const [editForm, setEditForm] = useState({ name: '', categoryId: '', departmentId: '', unit: '', minStock: '0', expiryDate: '', price: '0' });
   const [nameSuggestions, setNameSuggestions] = useState<Item[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
@@ -1375,6 +1490,7 @@ function Inventory({ items, categories, globalSearch, darkMode }: { items: Item[
     setNewItem({
       name: item.name,
       categoryId: item.categoryId,
+      departmentId: item.departmentId || '',
       unit: item.unit,
       minStock: item.minStock.toString(),
       currentStock: item.currentStock.toString(),
@@ -1390,6 +1506,7 @@ function Inventory({ items, categories, globalSearch, darkMode }: { items: Item[
   // Filtering & Sorting States
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategoryName, setFilterCategoryName] = useState('');
+  const [filterDeptId, setFilterDeptId] = useState('');
   const [filterStatus, setFilterStatus] = useState('all'); // all, low, expired, safe
   const [sortKey, setSortKey] = useState<keyof Item>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -1423,7 +1540,7 @@ function Inventory({ items, categories, globalSearch, darkMode }: { items: Item[
       }
 
       setShowAdd(false);
-      setNewItem({ name: '', categoryId: '', unit: '', minStock: '0', currentStock: '0', expiryDate: '', price: '0' });
+      setNewItem({ name: '', categoryId: '', departmentId: '', unit: '', minStock: '0', currentStock: '0', expiryDate: '', price: '0' });
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, "items");
     }
@@ -1434,6 +1551,7 @@ function Inventory({ items, categories, globalSearch, darkMode }: { items: Item[
     setEditForm({
       name: item.name,
       categoryId: item.categoryId,
+      departmentId: item.departmentId || '',
       unit: item.unit,
       minStock: item.minStock.toString(),
       expiryDate: item.expiryDate || '',
@@ -1605,6 +1723,8 @@ function Inventory({ items, categories, globalSearch, darkMode }: { items: Item[
           matchesCategory = itemCat?.name.trim().toLowerCase() === filterCategoryName.trim().toLowerCase();
         }
         
+        const matchesDept = !filterDeptId || item.departmentId === filterDeptId;
+        
         const isLow = item.currentStock <= item.minStock;
         const isExpired = item.expiryDate && new Date(item.expiryDate) < new Date();
         
@@ -1613,7 +1733,7 @@ function Inventory({ items, categories, globalSearch, darkMode }: { items: Item[
         if (filterStatus === 'expired') matchesStatus = !!isExpired;
         if (filterStatus === 'safe') matchesStatus = !isLow && !isExpired;
         
-        return matchesSearch && matchesCategory && matchesStatus;
+        return matchesSearch && matchesCategory && matchesDept && matchesStatus;
       })
       .sort((a, b) => {
       // Priority Sorting: Expired > Nearing Expiry > Low Stock > Others
@@ -1648,7 +1768,7 @@ function Inventory({ items, categories, globalSearch, darkMode }: { items: Item[
       if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [items, searchTerm, globalSearch, filterCategoryName, filterStatus, sortKey, sortOrder, categories]);
+  }, [items, searchTerm, globalSearch, filterCategoryName, filterDeptId, filterStatus, sortKey, sortOrder, categories]);
 
   return (
     <div className="space-y-6">
@@ -1674,6 +1794,16 @@ function Inventory({ items, categories, globalSearch, darkMode }: { items: Item[
               <option value="low">Sắp hết hàng</option>
               <option value="expired">Đã hết hạn</option>
               <option value="safe">An toàn</option>
+            </select>
+            <select 
+              value={filterDeptId}
+              onChange={(e) => setFilterDeptId(e.target.value)}
+              className={`px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'}`}
+            >
+              <option value="">Tất cả phòng</option>
+              {departments.map(d => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
             </select>
           </div>
           <div className="flex gap-2">
@@ -1774,6 +1904,7 @@ function Inventory({ items, categories, globalSearch, darkMode }: { items: Item[
                 </div>
               </th>
               <th className={`px-6 py-4 text-xs font-bold uppercase tracking-wider ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Nhóm</th>
+              <th className={`px-6 py-4 text-xs font-bold uppercase tracking-wider ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Phòng</th>
               <th className={`px-6 py-4 text-xs font-bold uppercase tracking-wider ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Đơn vị</th>
               <th 
                 className={`px-6 py-4 text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors ${darkMode ? 'text-slate-400 hover:bg-slate-700' : 'text-slate-500 hover:bg-slate-100'}`}
@@ -1838,6 +1969,9 @@ function Inventory({ items, categories, globalSearch, darkMode }: { items: Item[
                     </div>
                   </td>
                   <td className={`px-6 py-4 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{category?.name || 'N/A'}</td>
+                  <td className={`px-6 py-4 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                    {departments.find(d => d.id === item.departmentId)?.name || '-'}
+                  </td>
                   <td className={`px-6 py-4 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{item.unit}</td>
                   <td className={`px-6 py-4 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{(item.price || 0).toLocaleString('vi-VN')} đ</td>
                   <td className={`px-6 py-4 font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>{item.currentStock}</td>
@@ -1915,6 +2049,15 @@ function Inventory({ items, categories, globalSearch, darkMode }: { items: Item[
                   ))}
                 </select>
               </div>
+              <div>
+                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Phòng (Bộ phận)</label>
+                <RoomSelect 
+                  value={newItem.departmentId} 
+                  onChange={val => setNewItem({...newItem, departmentId: val})} 
+                  departments={departments} 
+                  darkMode={darkMode} 
+                />
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Đơn vị</label>
@@ -1967,6 +2110,15 @@ function Inventory({ items, categories, globalSearch, darkMode }: { items: Item[
                     <option key={cat.id} value={cat.id}>{cat.name}</option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Phòng (Bộ phận)</label>
+                <RoomSelect 
+                  value={editForm.departmentId} 
+                  onChange={val => setEditForm({...editForm, departmentId: val})} 
+                  departments={departments} 
+                  darkMode={darkMode} 
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -2034,9 +2186,14 @@ function Transactions({ transactions, items, departments, categories, globalSear
 
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [filterDeptId, setFilterDeptId] = useState('');
 
   const filteredTransactions = useMemo(() => {
     let filtered = transactions;
+
+    if (filterDeptId) {
+      filtered = filtered.filter(t => t.toDeptId === filterDeptId);
+    }
     
     if (globalSearch) {
       filtered = filtered.filter(t => {
@@ -2071,7 +2228,7 @@ function Transactions({ transactions, items, departments, categories, globalSear
     }
 
     return filtered;
-  }, [transactions, items, globalSearch, startDate, endDate]);
+  }, [transactions, items, globalSearch, startDate, endDate, filterDeptId]);
 
   useEffect(() => {
     if (itemSearchTerm.trim().length > 0 && showAdd) {
@@ -2175,9 +2332,22 @@ function Transactions({ transactions, items, departments, categories, globalSear
               className={`px-3 py-1.5 border rounded-lg text-xs focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`}
             />
           </div>
-          {(startDate || endDate) && (
+          <div className="flex items-center gap-2">
+            <span className={`text-xs font-bold uppercase ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Phòng:</span>
+            <select 
+              value={filterDeptId}
+              onChange={(e) => setFilterDeptId(e.target.value)}
+              className={`px-3 py-1.5 border rounded-lg text-xs focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-200 text-slate-900'}`}
+            >
+              <option value="">Tất cả</option>
+              {departments.map(d => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+          </div>
+          {(startDate || endDate || filterDeptId) && (
             <button 
-              onClick={() => { setStartDate(''); setEndDate(''); }}
+              onClick={() => { setStartDate(''); setEndDate(''); setFilterDeptId(''); }}
               className={`text-xs font-medium px-2 py-1 rounded hover:bg-slate-100 ${darkMode ? 'text-slate-400 hover:bg-slate-700' : 'text-slate-500'}`}
             >
               Xóa lọc
@@ -2310,10 +2480,13 @@ function Transactions({ transactions, items, departments, categories, globalSear
                 </div>
                 <div>
                   <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Đến phòng</label>
-                  <select className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-200 text-slate-900'}`} value={newTrans.toDeptId} onChange={e => setNewTrans({...newTrans, toDeptId: e.target.value})}>
-                    <option value="">Chọn phòng...</option>
-                    {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                  </select>
+                  <RoomSelect 
+                    value={newTrans.toDeptId} 
+                    onChange={val => setNewTrans({...newTrans, toDeptId: val})} 
+                    departments={departments} 
+                    darkMode={darkMode} 
+                    placeholder="Chọn phòng..."
+                  />
                 </div>
               </div>
               <div>
@@ -3072,7 +3245,7 @@ function Reports({ transactions, items, categories, holidays, globalSearch, dark
 
   const [isChartReady, setIsChartReady] = useState(false);
   useEffect(() => {
-    const timer = setTimeout(() => setIsChartReady(true), 500);
+    const timer = setTimeout(() => setIsChartReady(true), 1000);
     return () => clearTimeout(timer);
   }, []);
 
@@ -3149,10 +3322,10 @@ function Reports({ transactions, items, categories, holidays, globalSearch, dark
     element.innerHTML = title + tableHeader + footer;
 
     const opt = {
-      margin: [15, 15, 20, 15] as [number, number, number, number], // [top, left, bottom, right] in mm
+      margin: [15, 15, 20, 15] as [number, number, number, number],
       filename: `Bao_cao_ton_kho_${startDate}_den_${endDate}.pdf`,
       image: { type: 'jpeg' as const, quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+      html2canvas: { scale: 2, useCORS: true },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
       pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
     };
@@ -3428,10 +3601,10 @@ function Reports({ transactions, items, categories, holidays, globalSearch, dark
             <h3 className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>Giá trị theo nhóm vật tư</h3>
             <p className={`text-xs mt-1 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Phân bổ giá trị tồn kho hiện tại</p>
           </div>
-          <div className="flex-1 relative min-h-0">
+          <div className="flex-1 relative min-h-[300px]">
             {isChartReady && categoryValueData.length > 0 ? (
               <>
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" debounce={100}>
                   <PieChart>
                     <Pie
                       data={categoryValueData}
