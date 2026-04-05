@@ -1772,72 +1772,82 @@ function Inventory({ items, categories, departments, globalSearch, darkMode }: {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-          <div className="flex flex-wrap gap-2 flex-1 w-full">
-            <div className="relative flex-1 min-w-[200px]">
+      <div className={`p-4 rounded-2xl border shadow-sm ${darkMode ? 'bg-slate-800/50 border-slate-700/50' : 'bg-white border-slate-200'}`}>
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
+          <div className="flex flex-wrap gap-3 flex-1 w-full lg:max-w-2xl">
+            <div className="relative flex-1 min-w-[240px]">
               <Search className={`w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`} />
               <input 
                 type="text" 
                 placeholder="Tìm tên vật tư..." 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className={`w-full pl-10 pr-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-900'}`}
+                className={`w-full pl-10 pr-4 py-2.5 border rounded-xl text-sm transition-all focus:ring-2 focus:ring-blue-500/20 outline-none ${darkMode ? 'bg-slate-900 border-slate-700 text-white placeholder-slate-500 focus:border-blue-500' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-blue-500'}`}
               />
             </div>
-            <select 
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className={`px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'}`}
-            >
-              <option value="all">Tất cả trạng thái</option>
-              <option value="low">Sắp hết hàng</option>
-              <option value="expired">Đã hết hạn</option>
-              <option value="safe">An toàn</option>
-            </select>
-            <select 
-              value={filterDeptId}
-              onChange={(e) => setFilterDeptId(e.target.value)}
-              className={`px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'}`}
-            >
-              <option value="">Tất cả phòng</option>
-              {departments.filter(d => d.name !== 'Tất cả' && d.name !== 'Tất cả phòng').map(d => (
-                <option key={d.id} value={d.id}>{d.name}</option>
-              ))}
-            </select>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <select 
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className={`flex-1 sm:flex-none px-3 py-2.5 border rounded-xl text-sm font-medium focus:ring-2 focus:ring-blue-500/20 outline-none transition-all ${darkMode ? 'bg-slate-900 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-blue-500'}`}
+              >
+                <option value="all">Tất cả trạng thái</option>
+                <option value="low">Sắp hết hàng</option>
+                <option value="expired">Đã hết hạn</option>
+                <option value="safe">An toàn</option>
+              </select>
+              <select 
+                value={filterDeptId}
+                onChange={(e) => setFilterDeptId(e.target.value)}
+                className={`flex-1 sm:flex-none px-3 py-2.5 border rounded-xl text-sm font-medium focus:ring-2 focus:ring-blue-500/20 outline-none transition-all ${darkMode ? 'bg-slate-900 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-blue-500'}`}
+              >
+                <option value="">Tất cả phòng</option>
+                {departments.filter(d => d.name !== 'Tất cả' && d.name !== 'Tất cả phòng').map(d => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <input 
-              type="file" 
-              accept=".xlsx, .xls" 
-              className="hidden" 
-              ref={fileInputRef} 
-              onChange={handleImportExcel} 
-            />
-            <button 
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isImporting}
-              className={`px-4 py-2 border rounded-lg text-sm font-medium flex items-center gap-2 transition-colors disabled:opacity-50 ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
-            >
-              {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4 rotate-180" />}
-              Nhập Excel
-            </button>
-            <button className={`px-4 py-2 border rounded-lg text-sm font-medium flex items-center gap-2 transition-colors ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
-              <Download className="w-4 h-4" /> Xuất Excel
-            </button>
+          
+          <div className="flex items-center gap-2 w-full lg:w-auto justify-end">
+            <div className={`flex items-center p-1 rounded-xl border ${darkMode ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+              <input 
+                type="file" 
+                accept=".xlsx, .xls" 
+                className="hidden" 
+                ref={fileInputRef} 
+                onChange={handleImportExcel} 
+              />
+              <button 
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isImporting}
+                title="Nhập từ Excel"
+                className={`p-2 rounded-lg transition-all disabled:opacity-50 ${darkMode ? 'text-slate-400 hover:bg-slate-800 hover:text-white' : 'text-slate-600 hover:bg-white hover:shadow-sm'}`}
+              >
+                {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4 rotate-180" />}
+              </button>
+              <button 
+                title="Xuất ra Excel"
+                className={`p-2 rounded-lg transition-all ${darkMode ? 'text-slate-400 hover:bg-slate-800 hover:text-white' : 'text-slate-600 hover:bg-white hover:shadow-sm'}`}
+              >
+                <Download className="w-4 h-4" />
+              </button>
+            </div>
+
             {selectedIds.length > 0 && (
               <button 
                 onClick={() => setShowDeleteConfirm(true)}
-                className={`px-4 py-2 border rounded-lg text-sm font-medium flex items-center gap-2 transition-colors ${darkMode ? 'bg-red-900/20 text-red-400 border-red-800/30 hover:bg-red-900/30' : 'bg-red-50 text-red-600 border-red-100 hover:bg-red-100'}`}
+                className={`px-4 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all ${darkMode ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}
               >
-                <Trash2 className="w-4 h-4" /> Xóa ({selectedIds.length})
+                <Trash2 className="w-4 h-4" /> <span className="hidden sm:inline">Xóa</span> ({selectedIds.length})
               </button>
             )}
+            
             <button 
               onClick={() => setShowAdd(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-lg shadow-blue-100"
+              className="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 active:scale-95"
             >
-              <Plus className="w-4 h-4" /> Thêm vật tư
+              <Plus className="w-4 h-4" /> <span>Thêm vật tư</span>
             </button>
           </div>
         </div>
@@ -2315,6 +2325,11 @@ function Transactions({ transactions, items, departments, categories, globalSear
     return `${d}/${m}/${y}`;
   };
 
+  const uniqueItemsCount = useMemo(() => {
+    const itemIds = new Set(filteredTransactions.map(t => t.itemId));
+    return itemIds.size;
+  }, [filteredTransactions]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -2368,18 +2383,48 @@ function Transactions({ transactions, items, departments, categories, globalSear
         </button>
       </div>
 
-      <div className={`p-4 rounded-xl border flex items-center gap-3 ${darkMode ? 'bg-blue-900/20 border-blue-800/30 text-blue-300' : 'bg-blue-50 border-blue-100 text-blue-700'}`}>
-        <ArrowLeftRight className="w-4 h-4" />
-        <span className="text-sm font-medium">
-          Tổng số giao dịch: <strong className="text-base">{filteredTransactions.length}</strong>
-          {startDate && endDate ? (
-            <span> (từ {formatDate(startDate)} đến {formatDate(endDate)})</span>
-          ) : startDate ? (
-            <span> (từ {formatDate(startDate)})</span>
-          ) : endDate ? (
-            <span> (đến {formatDate(endDate)})</span>
-          ) : null}
-        </span>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className={`p-4 rounded-2xl border shadow-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+          <div className="flex items-center gap-3 mb-2">
+            <div className={`p-2 rounded-lg ${darkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
+              <ArrowLeftRight className="w-4 h-4" />
+            </div>
+            <span className={`text-xs font-bold uppercase tracking-wider ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Tổng số giao dịch</span>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className={`text-2xl font-black ${darkMode ? 'text-white' : 'text-slate-900'}`}>{filteredTransactions.length}</span>
+            <span className={`text-[10px] font-medium ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>giao dịch</span>
+          </div>
+        </div>
+
+        <div className={`p-4 rounded-2xl border shadow-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+          <div className="flex items-center gap-3 mb-2">
+            <div className={`p-2 rounded-lg ${darkMode ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-50 text-purple-600'}`}>
+              <Package className="w-4 h-4" />
+            </div>
+            <span className={`text-xs font-bold uppercase tracking-wider ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Vật tư có biến động</span>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className={`text-2xl font-black ${darkMode ? 'text-white' : 'text-slate-900'}`}>{uniqueItemsCount}</span>
+            <span className={`text-[10px] font-medium ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>loại vật tư</span>
+          </div>
+        </div>
+
+        <div className={`p-4 rounded-2xl border shadow-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+          <div className="flex items-center gap-3 mb-2">
+            <div className={`p-2 rounded-lg ${darkMode ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-50 text-amber-600'}`}>
+              <CalendarRange className="w-4 h-4" />
+            </div>
+            <span className={`text-xs font-bold uppercase tracking-wider ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Khoảng thời gian</span>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className={`text-sm font-bold ${darkMode ? 'text-slate-200' : 'text-slate-700'}`}>
+              {startDate && endDate ? `${formatDate(startDate)} - ${formatDate(endDate)}` : 
+               startDate ? `Từ ${formatDate(startDate)}` : 
+               endDate ? `Đến ${formatDate(endDate)}` : 'Tất cả thời gian'}
+            </span>
+          </div>
+        </div>
       </div>
 
       <div className={`rounded-2xl border shadow-sm overflow-hidden ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
@@ -3193,6 +3238,33 @@ function Reports({ transactions, items, categories, holidays, globalSearch, dark
   const totalPrevOut = useMemo(() => detailedReport.reduce((sum, item) => sum + item.prevOutQty, 0), [detailedReport]);
   const totalValue = useMemo(() => detailedReport.reduce((sum, item) => sum + (Number(item.closingBalance) * Number(item.price || 0)), 0), [detailedReport]);
   
+  const { totalTransactionsInRange, uniqueItemsWithTransactionsCount } = useMemo(() => {
+    const getTs = (t: any) => {
+      if (!t.timestamp) return 0;
+      if (typeof t.timestamp.toDate === 'function') return t.timestamp.toDate().getTime();
+      if (t.timestamp.seconds !== undefined) return t.timestamp.seconds * 1000;
+      const ts = new Date(t.timestamp).getTime();
+      if (!isNaN(ts)) return ts;
+      const dateStr = String(t.timestamp);
+      const ddmmyyyy = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(.*)$/);
+      if (ddmmyyyy) {
+        const [_, d, m, y, rest] = ddmmyyyy;
+        return new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}${rest || ''}`).getTime();
+      }
+      return 0;
+    };
+
+    const inRange = transactions.filter(t => {
+      const ts = getTs(t);
+      return ts >= startDateTime && ts <= endDateTime;
+    });
+
+    return {
+      totalTransactionsInRange: inRange.length,
+      uniqueItemsWithTransactionsCount: new Set(inRange.map(t => t.itemId)).size
+    };
+  }, [transactions, startDateTime, endDateTime]);
+
   const uniqueCategories = useMemo(() => {
     const map = new Map<string, Category>();
     categories.forEach(cat => {
@@ -3484,7 +3556,7 @@ function Reports({ transactions, items, categories, holidays, globalSearch, dark
       </div>
 
       {/* Summary Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
         <div className={`p-5 rounded-2xl border shadow-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
           <div className="flex items-center gap-4">
             <div className="p-3 rounded-xl bg-blue-500/10 text-blue-500">
@@ -3524,6 +3596,35 @@ function Reports({ transactions, items, categories, holidays, globalSearch, dark
             </div>
           </div>
         </div>
+        
+        {/* New Transaction Stats in Reports */}
+        <div className={`p-5 rounded-2xl border shadow-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-xl bg-indigo-500/10 text-indigo-500">
+              <ArrowLeftRight className="w-6 h-6" />
+            </div>
+            <div>
+              <p className={`text-xs font-medium ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Số lượt giao dịch</p>
+              <h4 className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>
+                {totalTransactionsInRange.toLocaleString('vi-VN')} <span className="text-xs font-normal opacity-70">lượt</span>
+              </h4>
+            </div>
+          </div>
+        </div>
+        <div className={`p-5 rounded-2xl border shadow-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-xl bg-purple-500/10 text-purple-500">
+              <Package className="w-6 h-6" />
+            </div>
+            <div>
+              <p className={`text-xs font-medium ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Vật tư có biến động</p>
+              <h4 className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>
+                {uniqueItemsWithTransactionsCount.toLocaleString('vi-VN')} <span className="text-xs font-normal opacity-70">loại</span>
+              </h4>
+            </div>
+          </div>
+        </div>
+
         <div className={`p-5 rounded-2xl border shadow-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
           <div className="flex items-center gap-4">
             <div className="p-3 rounded-xl bg-amber-500/10 text-amber-500">
