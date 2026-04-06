@@ -225,6 +225,54 @@ const getWorkingDays = (startDate: Date, endDate: Date, holidays: Holiday[]) => 
   return count;
 };
 
+// --- Components ---
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean, error: any }> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error("ErrorBoundary caught an error", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      let errorMessage = "Đã có lỗi xảy ra.";
+      try {
+        const parsedError = JSON.parse(this.state.error.message);
+        errorMessage = `Lỗi hệ thống: ${parsedError.error} (Operation: ${parsedError.operationType})`;
+      } catch (e) {
+        errorMessage = this.state.error.message || "Đã có lỗi xảy ra.";
+      }
+
+      return (
+        <div className="h-screen w-screen flex flex-col items-center justify-center p-4 bg-slate-50">
+          <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center border border-red-100">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <AlertTriangle className="w-8 h-8 text-red-600" />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-900 mb-4">Rất tiếc!</h2>
+            <p className="text-slate-600 mb-8">{errorMessage}</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="w-full py-3 px-6 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all shadow-lg shadow-blue-100"
+            >
+              Tải lại trang
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 const formatTimestamp = (timestamp: any) => {
   if (!timestamp) return '-';
   const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
@@ -363,13 +411,18 @@ export default function App() {
   useEffect(() => {
     if (!user || departments.length > 0) return;
     const initDepts = async () => {
-      const defaults = ["Tất cả", "X quang", "CLVT"];
-      for (const name of defaults) {
-        const q = query(collection(db, "departments"), where("name", "==", name));
-        const snap = await getDocs(q);
-        if (snap.empty) {
-          await addDoc(collection(db, "departments"), { name });
+      try {
+        const defaults = ["Tất cả", "X quang", "CLVT"];
+        for (const name of defaults) {
+          const q = query(collection(db, "departments"), where("name", "==", name));
+          const snap = await getDocs(q);
+          if (snap.empty) {
+            await addDoc(collection(db, "departments"), { name });
+          }
         }
+      } catch (error) {
+        console.error("Init Departments Error:", error);
+        handleFirestoreError(error, OperationType.WRITE, "departments-init");
       }
     };
     initDepts();
@@ -385,36 +438,41 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-slate-50">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-      </div>
+      <ErrorBoundary>
+        <div className="h-screen w-screen flex items-center justify-center bg-slate-50">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        </div>
+      </ErrorBoundary>
     );
   }
 
   if (!user) {
     return (
-      <div className={`h-screen w-screen flex flex-col items-center justify-center p-4 ${darkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
-        <Toaster position="top-right" richColors />
-        <div className={`max-w-md w-full rounded-2xl shadow-xl p-8 text-center border ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
-          <div className="w-20 h-20 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-blue-200">
-            <Package className="w-10 h-10 text-white" />
+      <ErrorBoundary>
+        <div className={`h-screen w-screen flex flex-col items-center justify-center p-4 ${darkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
+          <Toaster position="top-right" richColors />
+          <div className={`max-w-md w-full rounded-2xl shadow-xl p-8 text-center border ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
+            <div className="w-20 h-20 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-blue-200">
+              <Package className="w-10 h-10 text-white" />
+            </div>
+            <h1 className={`text-3xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-slate-900'}`}>Vật tư X Quang</h1>
+            <p className={`mb-8 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Hệ thống quản lý vật tư y tế thông minh tích hợp AI dành cho khoa Chẩn đoán hình ảnh.</p>
+            <button 
+              onClick={handleLogin}
+              className="w-full py-4 px-6 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-3 shadow-lg shadow-blue-100 active:scale-95"
+            >
+              <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="Google" />
+              Đăng nhập với Google
+            </button>
           </div>
-          <h1 className={`text-3xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-slate-900'}`}>Kho Vật Tư CDHA</h1>
-          <p className={`mb-8 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Hệ thống quản lý vật tư y tế thông minh tích hợp AI dành cho khoa Chẩn đoán hình ảnh.</p>
-          <button 
-            onClick={handleLogin}
-            className="w-full py-4 px-6 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-3 shadow-lg shadow-blue-100 active:scale-95"
-          >
-            <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="Google" />
-            Đăng nhập với Google
-          </button>
         </div>
-      </div>
+      </ErrorBoundary>
     );
   }
 
   return (
-    <div className={`min-h-screen flex ${darkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
+    <ErrorBoundary>
+      <div className={`min-h-screen flex ${darkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
       <Toaster position="top-right" richColors />
       
       {/* Mobile Sidebar Overlay */}
@@ -438,7 +496,7 @@ export default function App() {
               <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-md">
                 <Package className="w-6 h-6 text-white" />
               </div>
-              <span className={`font-bold text-xl ${darkMode ? 'text-white' : 'text-slate-900'}`}>CDHA Inventory</span>
+              <span className={`font-bold text-xl ${darkMode ? 'text-white' : 'text-slate-900'}`}>Vật tư X Quang</span>
             </div>
             <button 
               onClick={() => setSidebarOpen(false)} 
@@ -693,6 +751,7 @@ export default function App() {
         </div>
       )}
     </div>
+    </ErrorBoundary>
   );
 }
 
@@ -2317,12 +2376,6 @@ function Transactions({ transactions, items, departments, categories, globalSear
       toast.error('Lỗi khi xóa giao dịch');
       handleFirestoreError(err, OperationType.DELETE, `transactions/${transactionToDelete.id}`);
     }
-  };
-
-  const formatDate = (dateStr: string) => {
-    if (!dateStr) return '';
-    const [y, m, d] = dateStr.split('-');
-    return `${d}/${m}/${y}`;
   };
 
   const uniqueItemsCount = useMemo(() => {
